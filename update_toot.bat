@@ -2,32 +2,30 @@
 color 0B
 echo.
 echo   ##########################################
-echo   #       🦜 TOOT APP - CLEAN PUSH v4.2     #
-echo   #       WORKING FROM DRIVE C ONLY        #
+echo   #       🦜 TOOT APP - BUILD \u0026 UPDATE      #
+echo   #    (Fixing API \u0026 Registration Issues)    #
 echo   ##########################################
 echo.
 
-rem Force go to C: drive project path
 cd /d "C:\Users\PC\AndroidStudioProjects\MyApplication"
 
-echo [+] Removing any old tags locally...
-git tag -d v4.2 2>nul
+set /p ver="[1/2] Enter Version Number (e.g., 4.2): "
+set /p msg="[2/2] What did you change? "
 
-echo [+] Adding all clean files from C...
+echo [+] Updating Version in Gradle...
+powershell -Command "(gc app/build.gradle.kts) -replace 'versionName = \".*\"', 'versionName = \"%ver%\"' | Out-File -encoding UTF8 app/build.gradle.kts"
+
+echo [+] 🛠 BUILDING APK (This ensures your API Key is included)...
+call gradlew assembleDebug
+
+echo [+] Saving Source Code to GitHub...
 git add .
-
-set /p msg="[?] Enter Update Message: "
-if "%msg%"=="" set msg="Clean Release v4.2 from Drive C"
-
-echo [+] Committing...
-git commit -m "%msg%"
-
-echo [+] Tagging as v4.2...
-git tag v4.2
-
-echo [+] Pushing to GitHub (Forcing C drive version)...
-git push origin master:main --tags --force
+git commit -m "v%ver%: %msg%"
+git tag v%ver%
+git push origin main --tags --force
 
 echo.
-echo [OK] Everything is now on Drive C and GitHub is updated!
+echo [OK] Everything is updated!
+echo [!] NOW: Copy 'app-debug.apk' from the opened folder and upload it to GitHub.
+explorer "app\build\outputs\apk\debug"
 pause

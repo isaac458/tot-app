@@ -1,4 +1,4 @@
-import java.util.Properties
+﻿import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -18,11 +18,11 @@ android {
         minSdk = 24
         targetSdk = 35
         versionCode = 42
-        versionName = "4.2"
+        versionName = "v4.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // قراءة مفتاح API من local.properties
+        // Ù‚Ø±Ø§Ø¡Ø© Ù…ÙØªØ§Ø­ API Ù…Ù† local.properties
         val properties = Properties()
         val file = rootProject.file("local.properties")
         if (file.exists()) {
@@ -45,7 +45,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-    // في Kotlin 2.0+ يتم استخدام هذا التنسيق لـ jvmTarget
+    // ÙÙŠ Kotlin 2.0+ ÙŠØªÙ… Ø§Ø³ØªØ®Ø¯Ø§Ù… Ù‡Ø°Ø§ Ø§Ù„ØªÙ†Ø³ÙŠÙ‚ Ù„Ù€ jvmTarget
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
         kotlinOptions {
             jvmTarget = "11"
