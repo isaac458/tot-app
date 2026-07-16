@@ -1,4 +1,4 @@
-import java.util.Properties
+﻿import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -18,11 +18,11 @@ android {
         minSdk = 24
         targetSdk = 35
         versionCode = 43
-        versionName = "4.3"
+        versionName = ""
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // قراءة مفتاح API من local.properties
+        // Ù‚Ø±Ø§Ø¡Ø© Ù…ÙØªØ§Ø­ API Ù…Ù† local.properties
         val properties = Properties()
         val file = rootProject.file("local.properties")
         if (file.exists()) {
