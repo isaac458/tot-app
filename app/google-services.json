@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "764601305581",
+    "project_id": "tot-ai-628b7",
+    "storage_bucket": "tot-ai-628b7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:764601305581:android:88652998d125e4c817ffe4",
+        "android_client_info": {
+          "package_name": "com.empire.myapplication"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "764601305581-kdh1s6u493aderhit162i2f8ed72ldvp.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.empire.myapplication",
+            "certificate_hash": "36871d7a922aef254d8a9649e922d5dbfa7fc2aa"
+          }
+        },
+        {
+          "client_id": "764601305581-sh36efhgg918hagaqbi113h1q78p0l9r.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAgzatnkJ2jLDRKsXdKqvuvV0ZXHIPC5KE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "764601305581-sh36efhgg918hagaqbi113h1q78p0l9r.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
