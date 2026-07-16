@@ -1,0 +1,21 @@
+# Android Studio / IntelliJ
+*.iml
+.gradle
+/local.properties
+/.idea/
+.DS_Store
+/captures
+.externalNativeBuild
+.cxx
+
+# 🔥 أهم سطر: تجاهل كل مجلدات الـ build
+build/
+app/build/
+**/build/
+
+# Signatures
+*.jks
+*.keystore
+
+# Google Services
+google-services.json

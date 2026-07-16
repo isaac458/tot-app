@@ -1,0 +1,43 @@
+name: Build & Release APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    name: Release Local APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      # سنقوم بالبناء هنا أيضاً لضمان وجود ملف، ولكن الأفضل دائماً استخدام النسخة المحلية
+      - name: Build APK
+        run: |
+          echo "AI_API_KEY=${{ secrets.AI_API_KEY || 'dummy' }}" > local.properties
+          mkdir -p app/
+          echo '{"project_info":{"project_number":"0","project_id":"dummy"},"client":[{"client_info":{"mobilesdk_app_id":"0","android_client_info":{"package_name":"com.empire.myapplication"}},"api_key":[{"current_key":"dummy"}]}]}' > app/google-services.json
+          ./gradlew assembleDebug
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/outputs/apk/debug/*.apk
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body: "هذه النسخة تحتوي على آخر التعديلات. يرجى حذف النسخة القديمة من جوالك قبل تثبيت هذه النسخة."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
