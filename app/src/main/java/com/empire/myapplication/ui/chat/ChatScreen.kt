@@ -685,10 +685,14 @@ fun ChatScreen(
                         images = capturedImages,
                         onClearImage = { capturedImages = capturedImages.toMutableList().apply { removeAt(it) } },
                         onSend = {
-                            if (inputText.isNotBlank() || capturedImages.isNotEmpty()) {
-                                viewModel.sendMessage(inputText, capturedImages)
-                                inputText = ""
-                                capturedImages = emptyList()
+                            if (isTyping) {
+                                viewModel.stopGeneration()
+                            } else {
+                                if (inputText.isNotBlank() || capturedImages.isNotEmpty()) {
+                                    viewModel.sendMessage(inputText, capturedImages)
+                                    inputText = ""
+                                    capturedImages = emptyList()
+                                }
                             }
                         },
                         onMicClick = { onMicButtonClick() },
@@ -1332,7 +1336,24 @@ fun ChatInputArea(
                     )
                 )
 
-                if (text.isNotBlank() || images.isNotEmpty()) {
+                if (isTyping) {
+                    Box(
+                        modifier = Modifier
+                            .padding(2.dp)
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .border(1.dp, MaterialTheme.colorScheme.error.copy(0.5f), CircleShape)
+                            .clickable { onSend() }, // سنقوم بتعديل ViewModel ليوقف الإرسال عند استدعاء onSend والحالة typing
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Stop,
+                            contentDescription = "إيقاف",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                } else if (text.isNotBlank() || images.isNotEmpty()) {
                     Box(
                         modifier = Modifier
                             .padding(2.dp)

@@ -12,11 +12,15 @@ cd /d "%~dp0"
 
 set "GH_BIN=bin\gh.exe"
 
-echo [+] Fixing SDK Path in local.properties...
-(echo sdk.dir=C\:\\Users\\PC\\AppData\\Local\\Android\\Sdk)>local.properties
+echo [+] Checking local.properties...
+if not exist local.properties (
+    echo sdk.dir=C\:\\Users\\PC\\AppData\\Local\\Android\\Sdk > local.properties
+)
 findstr "AI_API_KEY" local.properties >nul
 if %ERRORLEVEL% NEQ 0 (
-    echo AI_API_KEY=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 >> local.properties
+    echo [?] AI_API_KEY is missing.
+    set /p "user_key=Please enter your Groq API Key: "
+    echo AI_API_KEY=!user_key! >> local.properties
 )
 
 echo [+] Stopping Gradle...
@@ -31,7 +35,8 @@ set ver=!raw_ver!
 if "!ver:~0,1!"=="v" set ver=!ver:~1!
 
 echo [+] Updating Version to v!ver!...
-powershell -Command "(gc app/build.gradle.kts) -replace 'versionName = \".*\"', 'versionName = \"!ver!\"' | Out-File -encoding UTF8 app/build.gradle.kts"
+set "v_code=!ver:.=!"
+powershell -Command "$content = gc app/build.gradle.kts; $content = $content -replace 'versionName = \".*\"', 'versionName = \"v!ver!\"'; $content = $content -replace 'versionCode = \d+', 'versionCode = !v_code!'; $content | Out-File -encoding UTF8 app/build.gradle.kts"
 
 echo [+] 🛠 BUILDING APK...
 echo [!] This is a fresh build, please wait...

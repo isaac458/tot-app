@@ -218,8 +218,8 @@ class AiRepository @Inject constructor(
     companion object {
         // اسم الموديل الأساسي للنصوص
         private const val MODEL_NAME = "llama-3.3-70b-versatile"
-        // موديل الرؤية (Vision) - تم الانتقال لـ 11b لضمان الاستقرار وتجنب خطأ 400 (Decommissioned)
-        private const val VISION_MODEL_NAME = "llama-3.2-11b-vision-preview"
+        // موديل الرؤية (Vision) - تم الانتقال إلى الموديل الأحدث 90b لتجنب خطأ الـ Decommissioned
+        private const val VISION_MODEL_NAME = "llama-3.2-90b-vision-preview"
     }
 
     /**
