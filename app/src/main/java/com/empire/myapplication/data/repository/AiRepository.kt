@@ -217,10 +217,10 @@ class AiRepository @Inject constructor(
 
     companion object {
         // للنصوص
-        private const val MODEL_NAME = "deepseek-r1-distill-llama-70b"
+        private const val MODEL_NAME = "openai/gpt-oss-120b"
 
         // للصور
-        private const val VISION_MODEL_NAME = "llama-3.2-11b-vision-preview"
+        private const val VISION_MODEL_NAME = "meta-llama/llama-4-scout-17b-16e-instruct"
     }
 
     /**

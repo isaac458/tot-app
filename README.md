@@ -1,35 +1,30 @@
-# 🦜 Toot AI
+# 🦜 تطبيق توت | Toot App
+[![Latest Release](https://img.shields.io/github/v/release/isaac458/tot-app?color=blue&label=Version)](https://github.com/isaac458/tot-app/releases)
+[![Platform](https://img.shields.io/badge/Platform-Android-green)](https://github.com/isaac458/tot-app)
 
-<div align="center">
-
-ذكاء اصطناعي سريع، ذكي، وحديث، يمنحك تجربة محادثة سلسة مع واجهة مصممة بعناية.
-
-[![Latest Release](https://img.shields.io/github/v/release/isaac458/tot-app?label=Version)](https://github.com/isaac458/tot-app/releases)
-[![Platform](https://img.shields.io/badge/Platform-Android-3DDC84?logo=android&logoColor=white)](https://github.com/isaac458/tot-app)
-
-</div>
+**توت هو مساعد ذكاء اصطناعي سريع وذكي، صُمم ليمنحك تجربة محادثة سلسة وحديثة مع دعم تحليل الصور، الذاكرة، المصادر، والعديد من الميزات التي تجعل استخدامه أكثر كفاءة وسهولة.**
 
 ---
 
-## ✨ المميزات
+## 📥 تحميل التطبيق
 
-- 🤖 محادثات ذكية وسريعة.
-- ⚡ استجابات فائقة السرعة.
-- 🖼️ تحليل الصور داخل المحادثة.
-- 🧠 ذاكرة تحفظ المعلومات المهمة لتحسين التجربة.
-- 📚 عرض المصادر والروابط بشكل منظم.
-- 💬 تنسيق رسائل احترافي يدعم Markdown.
-- 🔍 البحث بين المحادثات.
+يمكنك تحميل أحدث إصدار رسمي من التطبيق بصيغة **APK** من خلال صفحة الإصدارات على GitHub:
+
+### [🚀 اضغط هنا لتحميل أحدث إصدار](https://github.com/isaac458/tot-app/releases/latest)
+
+---
+
+## ✨ أبرز المميزات
+
+- ⚡ استجابات سريعة.
+- 🤖 محادثات ذكية.
+- 🖼️ تحليل الصور.
+- 🧠 ذاكرة لحفظ المعلومات المهمة.
+- 📚 عرض المصادر والروابط.
+- 💬 تنسيق رسائل احترافي.
+- 🔍 البحث داخل المحادثات.
+- 👤 وضع الضيف.
 - 🌙 واجهة حديثة وسهلة الاستخدام.
-- 👤 وضع الضيف بدون الحاجة إلى تسجيل الدخول.
-
----
-
-## 📥 التحميل
-
-يمكنك تحميل أحدث إصدار من التطبيق مباشرة من صفحة الإصدارات:
-
-### **➡️ https://github.com/isaac458/tot-app/releases/latest**
 
 ---
 
@@ -42,6 +37,6 @@
 
 ## ❤️ المطور
 
-تم تطوير **Toot AI** بواسطة **Isaac**.
+تم تطوير التطبيق بواسطة **[Isaac](https://github.com/isaac458)**.
 
-إذا أعجبك المشروع، لا تنسَ وضع ⭐ على المستودع لدعمه.
+إذا أعجبك المشروع، لا تنسَ وضع ⭐ على **[المستودع](https://github.com/isaac458/tot-app)** لدعم المشروع.
