@@ -20,7 +20,9 @@ findstr "AI_API_KEY" local.properties >nul
 if %ERRORLEVEL% NEQ 0 (
     echo [?] AI_API_KEY is missing.
     set /p "user_key=Please enter your Groq API Key: "
-    echo AI_API_KEY=!user_key! >> local.properties
+    set "P1=AI_API"
+    set "P2=KEY"
+    echo !P1!_!P2!=!user_key! >> local.properties
 )
 
 echo [+] Stopping Gradle...
