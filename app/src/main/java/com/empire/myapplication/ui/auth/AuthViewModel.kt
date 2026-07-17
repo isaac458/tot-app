@@ -15,6 +15,8 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
+import com.empire.myapplication.core.utils.AnalyticsManager
+import com.empire.myapplication.data.repository.AiRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,7 +27,10 @@ import javax.inject.Inject
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(
-    private val themeManager: ThemeManager
+    private val themeManager: ThemeManager,
+    private val analyticsManager: AnalyticsManager,
+    private val repository: AiRepository,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val auth = FirebaseAuth.getInstance()
@@ -66,6 +71,15 @@ class AuthViewModel @Inject constructor(
                     }
                     themeManager.setUserEmail(email)
                     themeManager.saveAccount(user.uid, themeManager.getUserName().ifBlank { displayName }, email, photoUrl)
+                    
+                    // تسجيل بصمة الجهاز والبيانات في Firestore
+                    analyticsManager.logUserPresence(context)
+
+                    // إرسال رسالة ترحيبية إذا كان مستخدماً جديداً
+                    if (isNewUser) {
+                        sendWelcomeMessage(user.uid, displayName.ifBlank { "مستخدم جديد" })
+                    }
+                    
                     onSuccess(isNewUser)
                 } else {
                     _error.value = "فشل الحصول على بيانات المستخدم"
@@ -85,6 +99,20 @@ class AuthViewModel @Inject constructor(
         themeManager.setGuest(true)
         themeManager.setLoggedIn(true)
         onComplete()
+    }
+
+    private fun sendWelcomeMessage(uid: String, name: String) {
+        viewModelScope.launch {
+            try {
+                val chatId = repository.createNewSession("الترحيب بـ $name", uid)
+                repository.sendMessage(
+                    chatId,
+                    "مرحباً توت، أنا مستخدم جديد اسمي $name. هل يمكنك الترحيب بي بأسلوبك اللطيف كفراشة ذكية ومساعدة؟ أخبريني باختصار عما يمكنك فعله."
+                )
+            } catch (e: Exception) {
+                Log.e("AuthViewModel", "Failed to send welcome message: ${e.message}")
+            }
+        }
     }
     
     fun saveOnboardingData(name: String, age: String, gender: String, acceptedTerms: Boolean, onComplete: () -> Unit) {

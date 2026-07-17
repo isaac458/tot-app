@@ -27,6 +27,7 @@ import com.empire.myapplication.ui.chat.ChatScreen
 import com.empire.myapplication.data.repository.AiRepository
 import com.empire.myapplication.ui.navigation.AppNavigation
 import com.empire.myapplication.core.utils.ThemeManager
+import com.empire.myapplication.core.utils.AnalyticsManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 
@@ -38,6 +39,9 @@ class MainActivity : ComponentActivity() {
     lateinit var themeManager: ThemeManager
 
     @javax.inject.Inject
+    lateinit var analyticsManager: AnalyticsManager
+
+    @javax.inject.Inject
     lateinit var aiRepository: AiRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,6 +50,11 @@ class MainActivity : ComponentActivity() {
         // تحسين استجابة لوحة المفاتيح
         WindowCompat.setDecorFitsSystemWindows(window, false)
         enableEdgeToEdge()
+
+        // تسجيل حضور المستخدم وبصمة الجهاز في كل مرة يفتح فيها التطبيق
+        if (themeManager.isLoggedIn()) {
+            analyticsManager.logUserPresence(this)
+        }
 
         // محادثات وضع الضيف لا تُحفظ أبداً بشكل دائم: أي عملية إطلاق جديدة للتطبيق
         // وكان آخر وضع معروف هو "ضيف" تمسح كل بيانات ذلك الضيف قبل عرض أي شاشة.

@@ -54,7 +54,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 
 private val BorderColor = Color(0x26FFFFFF)
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ChatScreen(
     onLogout: () -> Unit = {},
@@ -70,6 +70,7 @@ fun ChatScreen(
     var showProfile by remember { mutableStateOf(false) }
     var showSearchPage by remember { mutableStateOf(false) }
     var showSystemPages by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
     var sessionToRename by remember { mutableStateOf<com.empire.myapplication.data.local.ChatSession?>(null) }
     var sessionToDelete by remember { mutableStateOf<com.empire.myapplication.data.local.ChatSession?>(null) }
     var drawerSearchQuery by remember { mutableStateOf("") }
@@ -269,17 +270,21 @@ fun ChatScreen(
         }
     }
 
-    LaunchedEffect(messages.size, streamingText, isTyping) {
+    // تحسين التمرير التلقائي: يراقب حجم الرسائل، حالة الكتابة، وحالة لوحة المفاتيح
+    val imeVisible = WindowInsets.isImeVisible
+    LaunchedEffect(messages.size, streamingText, isTyping, imeVisible) {
         if (messages.isNotEmpty()) {
-            kotlinx.coroutines.delay(50)
+            // تأخير بسيط لضمان تحديث الـ Layout بعد ظهور لوحة المفاتيح أو الرسالة الجديدة
+            kotlinx.coroutines.delay(100)
             val totalItems = listState.layoutInfo.totalItemsCount
             if (totalItems > 0) {
                 try {
-                    listState.scrollToItem(totalItems - 1)
+                    listState.animateScrollToItem(totalItems - 1)
                 } catch (e: Exception) { }
             }
         }
     }
+
 
     if (showProfile) {
         ProfileScreen(themeManager = viewModel.themeManager, onDismiss = { showProfile = false })
@@ -301,6 +306,10 @@ fun ChatScreen(
                 showSystemPages = false
             }
         )
+    }
+
+    if (showAboutDialog) {
+        AboutDialog(onDismiss = { showAboutDialog = false })
     }
 
     if (showSearchPage) {
@@ -548,12 +557,16 @@ fun ChatScreen(
                             HorizontalDivider(color = Color(0x1AFFFFFF), thickness = 1.dp)
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            // ===== أسفل القائمة: المساعدة فقط =====
+                            // ===== أسفل القائمة: المساعدة وحول =====
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                DrawerBottomItem(label = "❓ المساعدة") {
+                                DrawerBottomItem(
+                                    label = "❓ المساعدة",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp
+                                ) {
                                     if (isGuest) {
                                         Toast.makeText(context, "يجب تسجيل الدخول أولاً للحصول على الدعم والمساعدة", Toast.LENGTH_LONG).show()
                                     } else {
@@ -567,6 +580,15 @@ fun ChatScreen(
                                             Toast.makeText(context, "لا يوجد تطبيق بريد إلكتروني مثبت لإرسال الرسالة", Toast.LENGTH_SHORT).show()
                                         }
                                     }
+                                }
+
+                                DrawerBottomItem(
+                                    label = "ℹ️ حول",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp
+                                ) {
+                                    showAboutDialog = true
+                                    scope.launch { drawerState.close() }
                                 }
                             }
                         }
@@ -601,82 +623,92 @@ fun ChatScreen(
                         colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
                     )
                 },
-                containerColor = Color.Transparent
+                containerColor = Color.Transparent,
+                // لضمان عدم تداخل العناصر مع شريط النظام
+                contentWindowInsets = androidx.compose.foundation.layout.WindowInsets.navigationBars
             ) { padding ->
-                Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-                    if (messages.isEmpty()) {
-                        WelcomeGrid { inputText = it }
-                    } else {
-                        LazyColumn(
-                            state = listState,
-                            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                            verticalArrangement = Arrangement.spacedBy(20.dp),
-                            // مساحة كافية أسفل القائمة حتى لا يغطي مربع الكتابة العائم آخر رسالة
-                            contentPadding = PaddingValues(top = 8.dp, bottom = 110.dp)
-                        ) {
-                            items(messages, key = { it.id }) { message ->
-                                var visible by remember { mutableStateOf(false) }
-                                LaunchedEffect(Unit) {
-                                    visible = true
-                                }
-                                AnimatedVisibility(
-                                    visible = visible,
-                                    enter = fadeIn(animationSpec = tween(400)) + slideInVertically(
-                                        initialOffsetY = { it / 3 },
-                                        animationSpec = tween(400)
-                                    ),
-                                    exit = fadeOut(animationSpec = tween(400))
-                                ) {
-                                    MessageItem(
-                                        message = message,
-                                        streamingText = if (message == messages.last() && isTyping) streamingText else null,
-                                        isSpeaking = speakingMessageId == message.id,
-                                        isPaused = isPaused && speakingMessageId == message.id,
-                                        isLastBotMessage = (message == messages.lastOrNull { it.role != "user" }),
-                                        onSpeak = { viewModel.speak(message.id, message.content) },
-                                        onPauseSpeak = { viewModel.pauseSpeaking() },
-                                        onResumeSpeak = { viewModel.resumeSpeaking() },
-                                        onStopSpeak = { viewModel.stopSpeaking() },
-                                        onShare = { viewModel.shareChat("توت") },
-                                        onRegenerate = { viewModel.regenerateLastResponse() },
-                                        getSources = { viewModel.getSourcesForMessage(message.id) }
-                                    )
-                                }
-                            }
-                            if (isTyping && streamingText.isBlank()) {
-                                item {
-                                    ThinkingItem()
-                                }
-                            }
-                        }
-
-                        val showScrollDown by remember {
-                            derivedStateOf {
-                                val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-                                messages.isNotEmpty() && lastVisible < messages.size - 2
-                            }
-                        }
-
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = showScrollDown,
-                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp),
-                            enter = fadeIn(),
-                            exit = fadeOut()
-                        ) {
-                            Surface(
-                                onClick = { scope.launch { listState.animateScrollToItem(messages.size - 1) } },
-                                shape = CircleShape,
-                                color = Color(0xFF2F2F2F),
-                                modifier = Modifier.size(36.dp)
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .imePadding() // يرفع المحتوى بالكامل عند ظهور لوحة المفاتيح
+                ) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        if (messages.isEmpty()) {
+                            WelcomeGrid { inputText = it }
+                        } else {
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                                verticalArrangement = Arrangement.spacedBy(20.dp),
+                                contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp)
                             ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Default.KeyboardArrowDown, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                                items(messages, key = { it.id }) { message ->
+                                    var visible by remember { mutableStateOf(false) }
+                                    LaunchedEffect(Unit) {
+                                        visible = true
+                                    }
+                                    Box {
+                                        androidx.compose.animation.AnimatedVisibility(
+                                            visible = visible,
+                                            enter = fadeIn(animationSpec = tween(400)) + slideInVertically(
+                                                initialOffsetY = { it / 3 },
+                                                animationSpec = tween(400)
+                                            ),
+                                            exit = fadeOut(animationSpec = tween(400))
+                                        ) {
+                                            MessageItem(
+                                                message = message,
+                                                streamingText = if (message == messages.last() && isTyping) streamingText else null,
+                                                isSpeaking = speakingMessageId == message.id,
+                                                isPaused = isPaused && speakingMessageId == message.id,
+                                                isLastBotMessage = (message == messages.lastOrNull { it.role != "user" }),
+                                                onSpeak = { viewModel.speak(message.id, message.content) },
+                                                onPauseSpeak = { viewModel.pauseSpeaking() },
+                                                onResumeSpeak = { viewModel.resumeSpeaking() },
+                                                onStopSpeak = { viewModel.stopSpeaking() },
+                                                onShare = { viewModel.shareChat("توت") },
+                                                onRegenerate = { viewModel.regenerateLastResponse() },
+                                                getSources = { viewModel.getSourcesForMessage(message.id) }
+                                            )
+                                        }
+                                    }
+                                }
+                                if (isTyping && streamingText.isBlank()) {
+                                    item {
+                                        ThinkingItem()
+                                    }
+                                }
+                            }
+
+                            val showScrollDown by remember {
+                                derivedStateOf {
+                                    val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                                    messages.isNotEmpty() && lastVisible < messages.size - 2
+                                }
+                            }
+
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = showScrollDown,
+                                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
+                                enter = fadeIn(),
+                                exit = fadeOut()
+                            ) {
+                                Surface(
+                                    onClick = { scope.launch { listState.animateScrollToItem(messages.size - 1) } },
+                                    shape = CircleShape,
+                                    color = Color(0xFF2F2F2F),
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.KeyboardArrowDown, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                                    }
                                 }
                             }
                         }
                     }
 
-                    // ===== مربع الكتابة العائم: يطفو فوق الرسائل بدل أن يكون جزءاً ثابتاً من التخطيط =====
+                    // ===== مربع الكتابة العائم في نهاية الـ Column =====
                     ChatInputArea(
                         text = inputText,
                         onTextChange = { inputText = it },
@@ -689,6 +721,7 @@ fun ChatScreen(
                                 viewModel.stopGeneration()
                             } else {
                                 if (inputText.isNotBlank() || capturedImages.isNotEmpty()) {
+                                    keyboardController?.hide() // إخفاء لوحة المفاتيح عند الإرسال
                                     viewModel.sendMessage(inputText, capturedImages)
                                     inputText = ""
                                     capturedImages = emptyList()
@@ -699,9 +732,7 @@ fun ChatScreen(
                         onCameraClick = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) },
                         onGalleryClick = { galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                         themeColor = themeColor,
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .imePadding()
+                        modifier = Modifier.navigationBarsPadding()
                     )
                 }
             }
@@ -1592,18 +1623,111 @@ fun ThreeDotsIndicator() {
 }
 
 @Composable
+private fun AboutDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF1E1E1E),
+        shape = RoundedCornerShape(24.dp),
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Info, null, tint = Color.White)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("حول", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // روابط المنصة
+                AboutLinkItem(
+                    label = "حساب البوت",
+                    url = "https://www.instagram.com/dvdf.d6?igsh=MTZuN2UzMWVoeGRhaA==",
+                    domain = "instagram.com"
+                )
+                AboutLinkItem(
+                    label = "حساب المطور",
+                    url = "https://www.instagram.com/isacc_55_5?igsh=MWV2Zm0ycnYyanQ4Nw==",
+                    domain = "instagram.com"
+                )
+
+                // قسم "بوتات أخرى"
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0x1AFFFFFF))
+                    Text(
+                        "بوتات أخرى",
+                        color = Color.White.copy(0.5f),
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    )
+                    HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0x1AFFFFFF))
+                }
+
+                AboutLinkItem(
+                    label = "بوت تيليجرام",
+                    url = "https://t.me/isaac_bro554BOT",
+                    domain = "t.me"
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("إغلاق", color = Color(0xFF6EA8FF))
+            }
+        }
+    )
+}
+
+@Composable
+private fun AboutLinkItem(label: String, url: String, domain: String) {
+    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+    Surface(
+        onClick = { try { uriHandler.openUri(url) } catch (e: Exception) {} },
+        color = Color(0x1AFFFFFF),
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x22FFFFFF))
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(Color.White),
+                contentAlignment = Alignment.Center
+            ) {
+                coil.compose.AsyncImage(
+                    model = "https://www.google.com/s2/favicons?sz=128&domain=$domain",
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(label, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.weight(1f))
+            Icon(Icons.Default.OpenInNew, null, tint = Color.White.copy(0.3f), modifier = Modifier.size(16.dp))
+        }
+    }
+}
+
+@Composable
 private fun DrawerBottomItem(
     label: String,
+    fontWeight: FontWeight = FontWeight.Medium,
+    fontSize: androidx.compose.ui.unit.TextUnit = 14.sp,
     onClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(12.dp))
             .clickable { onClick() }
-            .padding(vertical = 10.dp, horizontal = 12.dp),
+            .padding(vertical = 12.dp, horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Text(label, color = Color.White, fontSize = fontSize, fontWeight = fontWeight)
     }
 }
