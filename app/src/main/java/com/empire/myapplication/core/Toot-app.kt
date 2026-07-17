@@ -21,6 +21,6 @@ object AiConstants {
     
     // تحديث التطبيق تلقائياً عبر GitHub
     const val GITHUB_USER = "isaac458"
-    const val GITHUB_REPO = "Toot-app"
+    const val GITHUB_REPO = "tot-app"
     const val GITHUB_API_URL = "https://api.github.com/repos/$GITHUB_USER/$GITHUB_REPO/releases/latest"
 }
