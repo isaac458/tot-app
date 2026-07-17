@@ -4,28 +4,41 @@ color 0B
 echo.
 echo   ##########################################
 echo   #       🦜 TOOT APP - AUTO RELEASE       #
-echo   #       Build, Push \u0026 Upload APK         #
+echo   #       LOCATION: DRIVE D (FIXED PATH)   #
 echo   ##########################################
 echo.
 
 cd /d "%~dp0"
 
-rem 1. طلب رقم الإصدار
-set /p raw_ver="[1/2] Enter New Version (e.g., 4.3): "
-set /p msg="[2/2] Enter Release Notes (Brief): "
+set "GH_BIN=bin\gh.exe"
 
+echo [+] Fixing SDK Path in local.properties...
+(echo sdk.dir=C\:\\Users\\PC\\AppData\\Local\\Android\\Sdk)>local.properties
+findstr "AI_API_KEY" local.properties >nul
+if %ERRORLEVEL% NEQ 0 (
+    echo AI_API_KEY=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 >> local.properties
+)
+
+echo [+] Stopping Gradle...
+call gradlew.bat --stop >nul 2>&1
+
+echo [+] Accepting Licenses (Standard Path)...
+cmd /c "(echo y & echo y & echo y & echo y & echo y & echo y) | C:\Users\PC\AppData\Local\Android\Sdk\cmdline-tools\latest\bin\sdkmanager.bat --licenses" >nul 2>&1
+
+set /p raw_ver="[1/2] Enter New Version (e.g., 4.4): "
+set /p msg="[2/2] Enter Release Notes: "
 set ver=!raw_ver!
 if "!ver:~0,1!"=="v" set ver=!ver:~1!
 
-echo [+] Target Version: v!ver!
-echo [+] Updating Version in Gradle...
+echo [+] Updating Version to v!ver!...
 powershell -Command "(gc app/build.gradle.kts) -replace 'versionName = \".*\"', 'versionName = \"!ver!\"' | Out-File -encoding UTF8 app/build.gradle.kts"
 
-echo [+] 🛠 BUILDING APK LOCAL...
-call gradlew.bat assembleDebug
+echo [+] 🛠 BUILDING APK...
+echo [!] This is a fresh build, please wait...
+call gradlew.bat clean assembleDebug --no-daemon
 
 if %ERRORLEVEL% NEQ 0 (
-    echo [!] Build failed!
+    echo [!] Build failed. Please check if the space in SDK path is gone.
     pause
     exit /b %ERRORLEVEL%
 )
@@ -37,21 +50,13 @@ git tag -d v!ver! 2>nul
 git tag v!ver!
 git push origin main --tags --force
 
-echo [+] 🚀 UPLOADING APK TO GITHUB RELEASES...
-where gh >nul 2>nul
-if %ERRORLEVEL% EQU 0 (
-    echo [+] Creating GitHub Release...
-    gh release create v!ver! "app\build\outputs\apk\debug\app-debug.apk" --title "Toot App v!ver!" --notes "!msg!"
-    echo [OK] APK Uploaded Successfully!
-) else (
-    echo.
-    echo [!] GitHub CLI (gh) not found.
-    echo [!] Please install it from: https://cli.github.com/
-    echo [!] For now, upload the APK manually to: https://github.com/isaac458/tot-app/releases
+echo [+] 🚀 UPLOADING APK TO GITHUB...
+if exist "%GH_BIN%" (
+    "%GH_BIN%" release delete v!ver! --yes 2>nul
+    "%GH_BIN%" release create v!ver! "app\build\outputs\apk\debug\app-debug.apk" --title "Toot App v!ver!" --notes "!msg!"
+    echo [OK] v!ver! Uploaded Successfully!
 )
 
 echo.
-echo [DONE] Version v!ver! is live!
-echo [!] Opening Releases page...
-start https://github.com/isaac458/tot-app/releases
+echo [DONE] Visit: https://github.com/isaac458/tot-app/releases
 pause
