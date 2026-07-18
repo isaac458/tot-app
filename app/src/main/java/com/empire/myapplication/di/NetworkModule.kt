@@ -56,4 +56,10 @@ object NetworkModule {
     fun provideUpdateApiService(retrofit: Retrofit): UpdateApiService {
         return retrofit.create(UpdateApiService::class.java)
     }
+
+    @Provides
+    @Singleton
+    fun provideBotApiService(retrofit: Retrofit): com.empire.myapplication.data.remote.BotApiService {
+        return retrofit.create(com.empire.myapplication.data.remote.BotApiService::class.java)
+    }
 }

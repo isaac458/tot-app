@@ -16,6 +16,9 @@ import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PrivacyTip
@@ -24,6 +27,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -139,6 +143,7 @@ private fun getPageTitle(page: String): String {
         "privacy" -> "سياسة الخصوصية"
         "devices" -> "الأجهزة المتصلة"
         "last_login" -> "آخر تسجيل دخول"
+        "link_instagram" -> "ربط انستغرام"
         else -> ""
     }
 }
@@ -155,6 +160,7 @@ private fun MenuContent(
 ) {
     var savedAccountsList by remember { mutableStateOf(themeManager.getSavedAccounts()) }
     val currentUid = remember { themeManager.getUserId() }
+    var isAccountsExpanded by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -165,14 +171,14 @@ private fun MenuContent(
     ) {
         // قسم الحسابات المحفوظة
         Text(
-            "الحسابات المحفوظة على هذا الجهاز",
+            "الحسابات",
             fontWeight = FontWeight.Bold,
             fontSize = 15.sp,
             color = GlassText,
             modifier = Modifier.padding(vertical = 4.dp)
         )
         
-        if (savedAccountsList.isEmpty()) {
+        if (savedAccountsList.isEmpty() || isGuest) {
             Text(
                 "لا توجد حسابات أخرى محفوظة حالياً",
                 fontSize = 13.sp,
@@ -180,24 +186,20 @@ private fun MenuContent(
                 modifier = Modifier.padding(bottom = 4.dp)
             )
         } else {
-            savedAccountsList.forEach { account ->
-                val isCurrent = account.uid == currentUid
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(GlassDark)
+                    .border(1.dp, GlassBorderSubtle, RoundedCornerShape(14.dp))
+            ) {
+                val currentAccount = savedAccountsList.find { it.uid == currentUid }
+                
+                // الحساب الحالي (يظهر دائماً)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .border(
-                            width = if (isCurrent) 1.5.dp else 1.dp,
-                            color = if (isCurrent) GlowBlue else GlassBorderSubtle,
-                            shape = RoundedCornerShape(14.dp)
-                        )
-                        .background(if (isCurrent) Color(0x1F4285F4) else GlassDark)
-                        .clickable {
-                            if (!isCurrent) {
-                                themeManager.switchAccount(account.uid)
-                                onSwitchAccount(account.uid)
-                            }
-                        }
+                        .clickable { isAccountsExpanded = !isAccountsExpanded }
                         .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -208,9 +210,9 @@ private fun MenuContent(
                             .background(GlassWhiteStrong),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (account.avatarUri != null) {
+                        if (currentAccount?.avatarUri != null) {
                             coil.compose.AsyncImage(
-                                model = account.avatarUri,
+                                model = currentAccount.avatarUri,
                                 contentDescription = null,
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = androidx.compose.ui.layout.ContentScale.Crop
@@ -219,58 +221,108 @@ private fun MenuContent(
                             Icon(Icons.Default.Person, null, tint = Color.White, modifier = Modifier.size(20.dp))
                         }
                     }
-                    
                     Spacer(modifier = Modifier.width(12.dp))
-                    
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(account.name, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
-                        Text(account.email, fontSize = 11.sp, color = GlassTextSecondary)
+                        Text(currentAccount?.name ?: "حسابي", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
+                        Text(currentAccount?.email ?: "", fontSize = 11.sp, color = GlassTextSecondary)
                     }
-                    
-                    if (isCurrent) {
-                        Text("الحالي", color = GlowBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    } else {
-                        IconButton(
-                            onClick = {
-                                themeManager.removeAccount(account.uid)
-                                savedAccountsList = themeManager.getSavedAccounts()
-                            },
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(Icons.Default.Delete, contentDescription = "حذف الحساب", tint = Color(0xFFFF5252), modifier = Modifier.size(16.dp))
+                    Text("الحالي", color = GlowBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(if (isAccountsExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, null, tint = GlassTextSecondary)
+                }
+
+                // الحسابات البديلة وزر الإضافة (تظهر عند التوسيع)
+                AnimatedVisibility(visible = isAccountsExpanded) {
+                    Column {
+                        HorizontalDivider(color = GlassBorderSubtle, thickness = 1.dp)
+                        val otherAccounts = savedAccountsList.filter { it.uid != currentUid }
+                        
+                        otherAccounts.forEach { account ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        themeManager.switchAccount(account.uid)
+                                        onSwitchAccount(account.uid)
+                                    }
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .background(GlassWhiteStrong),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (account.avatarUri != null) {
+                                        coil.compose.AsyncImage(
+                                            model = account.avatarUri,
+                                            contentDescription = null,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                        )
+                                    } else {
+                                        Icon(Icons.Default.Person, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(account.name, fontWeight = FontWeight.Medium, fontSize = 13.sp, color = Color.White)
+                                }
+                                IconButton(
+                                    onClick = {
+                                        themeManager.removeAccount(account.uid)
+                                        savedAccountsList = themeManager.getSavedAccounts()
+                                    },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(Icons.Default.Delete, contentDescription = "حذف الحساب", tint = Color(0xFFFF5252), modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+
+                        // زر الإضافة مخفي إذا وصل عدد الحسابات لـ 3
+                        if (savedAccountsList.size < 3) {
+                            HorizontalDivider(color = GlassBorderSubtle, thickness = 1.dp)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        FirebaseAuth.getInstance().signOut()
+                                        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                                            .requestIdToken(webClientId)
+                                            .requestEmail()
+                                            .build()
+                                        GoogleSignIn.getClient(context, gso).signOut().addOnCompleteListener {
+                                            onLogout()
+                                        }
+                                    }
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(Icons.Default.Add, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("إضافة حساب آخر للتبديل", color = Color.White, fontSize = 13.sp)
+                            }
                         }
                     }
                 }
-            }
-        }
-        
-        if (!isGuest) {
-            Button(
-                onClick = {
-                    // Sign out from Firebase but keep saved accounts
-                    FirebaseAuth.getInstance().signOut()
-                    val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                        .requestIdToken(webClientId)
-                        .requestEmail()
-                        .build()
-                    GoogleSignIn.getClient(context, gso).signOut().addOnCompleteListener {
-                        onLogout()
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = GlassWhiteStrong),
-                shape = RoundedCornerShape(12.dp),
-                contentPadding = PaddingValues(vertical = 10.dp)
-            ) {
-                Icon(Icons.Default.Add, null, tint = Color.White, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("إضافة حساب آخر للتبديل", color = Color.White, fontSize = 14.sp)
             }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
         HorizontalDivider(color = GlassBorderSubtle, thickness = 1.dp)
         Spacer(modifier = Modifier.height(4.dp))
+        
+        MenuItem(
+            icon = Icons.Default.Link,
+            title = "ربط حساب انستغرام",
+            subtitle = "أوامر البوت والتحكم",
+            onClick = { onNavigate("link_instagram") },
+            bgColor = Color(0xFFE1306C)
+        )
 
         MenuItem(
             icon = Icons.Default.Description,
@@ -469,6 +521,88 @@ private fun LastLoginContent() {
             Column {
                 Text("اليوم", fontWeight = FontWeight.Bold, color = GlassText)
                 Text("الموقع: الجزائر", fontSize = 12.sp, color = GlassTextSecondary)
+            }
+        }
+    }
+}
+
+@Composable
+fun LinkInstagramContent(
+    themeManager: com.empire.myapplication.core.utils.ThemeManager,
+    viewModel: com.empire.myapplication.ui.chat.SystemViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+) {
+    val isLoading by viewModel.isLoading.collectAsState()
+    val generatedCode by viewModel.generatedCode.collectAsState()
+    val error by viewModel.error.collectAsState()
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        viewModel.generateLinkCode()
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("ربط حساب انستغرام", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = GlassText, modifier = Modifier.padding(bottom = 16.dp))
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        if (isLoading) {
+            CircularProgressIndicator(color = GlowBlue)
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("جاري توليد كود الربط...", color = GlassTextSecondary)
+        } else if (generatedCode != null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .glassCard(backgroundColor = Color(0x33E1306C), borderColor = Color(0x80E1306C), blurRadius = 20f)
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("كود الربط الخاص بك:", color = GlassTextSecondary, fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = generatedCode!!,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 24.sp,
+                    color = Color.White,
+                    letterSpacing = 2.sp
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Button(
+                    onClick = {
+                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(generatedCode!!))
+                        android.widget.Toast.makeText(context, "تم نسخ الكود!", android.widget.Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = GlassWhiteStrong),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("نسخ الكود", color = Color.White)
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                "يرجى الذهاب إلى البوت في انستغرام وإرسال الرسالة التالية:\n\n!link $generatedCode",
+                textAlign = TextAlign.Center,
+                color = GlassText,
+                lineHeight = 22.sp
+            )
+        } else if (error != null) {
+            Text("حدث خطأ:", color = Color(0xFFFF5252), fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(error!!, color = GlassTextSecondary, textAlign = TextAlign.Center)
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(
+                onClick = { viewModel.generateLinkCode() },
+                colors = ButtonDefaults.buttonColors(containerColor = GlassDark),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("إعادة المحاولة", color = Color.White)
             }
         }
     }
