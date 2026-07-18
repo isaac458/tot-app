@@ -129,6 +129,7 @@ fun SystemPagesDialog(
                         "privacy" -> PrivacyContent()
                         "devices" -> DevicesContent()
                         "last_login" -> LastLoginContent()
+                        "link_instagram" -> LinkInstagramContent(themeManager = themeManager)
                     }
                 }
             }
@@ -481,7 +482,6 @@ private fun DevicesContent() {
             .verticalScroll(rememberScrollState())
     ) {
         Text("أجهزتك المتصلة", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = GlassText, modifier = Modifier.padding(bottom = 16.dp))
-        
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -508,7 +508,6 @@ private fun LastLoginContent() {
             .verticalScroll(rememberScrollState())
     ) {
         Text("سجل الدخول الأخير", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = GlassText, modifier = Modifier.padding(bottom = 16.dp))
-        
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -532,13 +531,16 @@ fun LinkInstagramContent(
     viewModel: com.empire.myapplication.ui.chat.SystemViewModel = androidx.hilt.navigation.compose.hiltViewModel()
 ) {
     val isLoading by viewModel.isLoading.collectAsState()
+    val isCheckingStatus by viewModel.isCheckingStatus.collectAsState()
     val generatedCode by viewModel.generatedCode.collectAsState()
     val error by viewModel.error.collectAsState()
+    val userData by viewModel.userData.collectAsState()
+    val unlinkMessage by viewModel.unlinkMessage.collectAsState()
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
-        viewModel.generateLinkCode()
+        viewModel.checkLinkStatus()
     }
 
     Column(
@@ -548,11 +550,63 @@ fun LinkInstagramContent(
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("ربط حساب انستغرام", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = GlassText, modifier = Modifier.padding(bottom = 16.dp))
-        
         Spacer(modifier = Modifier.height(24.dp))
-        
-        if (isLoading) {
+
+        if (isCheckingStatus) {
+            CircularProgressIndicator(color = GlowBlue)
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("جاري التحقق من حالة الربط...", color = GlassTextSecondary)
+        } else if (userData?.linked == true) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .glassCard(backgroundColor = Color(0x3310B981), borderColor = Color(0x8010B981), blurRadius = 20f)
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("✅", fontSize = 48.sp)
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("حسابك مرتبط بنجاح!", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.White)
+                Spacer(modifier = Modifier.height(8.dp))
+                if (userData?.instagramUsername != null) {
+                    Text("@${userData!!.instagramUsername}", fontSize = 16.sp, color = Color(0xFF10B981), fontWeight = FontWeight.Bold)
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                if (userData?.quota != null) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("${userData!!.quota!!.used}", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = Color.White)
+                            Text("مستخدم اليوم", fontSize = 11.sp, color = GlassTextSecondary)
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("${userData!!.quota!!.daily}", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = Color.White)
+                            Text("الحد اليومي", fontSize = 11.sp, color = GlassTextSecondary)
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(userData?.plan?.uppercase() ?: "FREE", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = Color(0xFF10B981))
+                            Text("الخطة", fontSize = 11.sp, color = GlassTextSecondary)
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(
+                onClick = { viewModel.unlinkAccount() },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0x33FF5252)),
+                shape = RoundedCornerShape(12.dp),
+                enabled = !isLoading
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                Text("فك ربط الحساب", color = Color(0xFFFF5252))
+            }
+            if (unlinkMessage != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(unlinkMessage!!, color = Color(0xFF10B981), fontSize = 13.sp)
+            }
+        } else if (isLoading) {
             CircularProgressIndicator(color = GlowBlue)
             Spacer(modifier = Modifier.height(16.dp))
             Text("جاري توليد كود الربط...", color = GlassTextSecondary)
@@ -566,13 +620,7 @@ fun LinkInstagramContent(
             ) {
                 Text("كود الربط الخاص بك:", color = GlassTextSecondary, fontSize = 14.sp)
                 Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = generatedCode!!,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 24.sp,
-                    color = Color.White,
-                    letterSpacing = 2.sp
-                )
+                Text(text = generatedCode!!, fontWeight = FontWeight.Bold, fontSize = 24.sp, color = Color.White, letterSpacing = 2.sp)
                 Spacer(modifier = Modifier.height(24.dp))
                 Button(
                     onClick = {
@@ -586,12 +634,7 @@ fun LinkInstagramContent(
                 }
             }
             Spacer(modifier = Modifier.height(24.dp))
-            Text(
-                "يرجى الذهاب إلى البوت في انستغرام وإرسال الرسالة التالية:\n\n!link $generatedCode",
-                textAlign = TextAlign.Center,
-                color = GlassText,
-                lineHeight = 22.sp
-            )
+            Text("يرجى الذهاب إلى البوت في انستغرام وإرسال:\n\n!link $generatedCode", textAlign = TextAlign.Center, color = GlassText, lineHeight = 22.sp)
         } else if (error != null) {
             Text("حدث خطأ:", color = Color(0xFFFF5252), fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(8.dp))
@@ -603,6 +646,28 @@ fun LinkInstagramContent(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text("إعادة المحاولة", color = Color.White)
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .glassCard(backgroundColor = GlassDark, borderColor = GlassBorderSubtle, blurRadius = 20f)
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("🔗", fontSize = 48.sp)
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("حسابك غير مرتبط", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("اربط حسابك في انستغرام للتحكم بالبوت واستخدام الأوامر.", textAlign = TextAlign.Center, color = GlassTextSecondary, fontSize = 13.sp)
+                Spacer(modifier = Modifier.height(20.dp))
+                Button(
+                    onClick = { viewModel.generateLinkCode() },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE1306C)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("توليد كود الربط", color = Color.White, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }

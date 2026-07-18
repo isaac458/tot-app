@@ -17,12 +17,12 @@ android {
         applicationId = "com.empire.myapplication"
         minSdk = 24
         targetSdk = 35
-        versionCode = 48
-        versionName = "v4.8"
+        versionCode = 49
+        versionName = "v4.9"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Ù‚Ø±Ø§Ø¡Ø© Ù…ÙØªØ§Ø­ API Ù…Ù† local.properties
+        // Ã™â€šÃ˜Â±Ã˜Â§Ã˜Â¡Ã˜Â© Ã™â€¦Ã™ÂÃ˜ÂªÃ˜Â§Ã˜Â­ API Ã™â€¦Ã™â€  local.properties
         val properties = Properties()
         val file = rootProject.file("local.properties")
         if (file.exists()) {
@@ -102,6 +102,7 @@ dependencies {
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-messaging")
     implementation("androidx.credentials:credentials:1.2.2")
     implementation("androidx.credentials:credentials-play-services-auth:1.2.2")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")

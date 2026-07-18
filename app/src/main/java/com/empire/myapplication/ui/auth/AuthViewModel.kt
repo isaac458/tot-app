@@ -75,6 +75,9 @@ class AuthViewModel @Inject constructor(
                     // تسجيل بصمة الجهاز والبيانات في Firestore
                     analyticsManager.logUserPresence(context)
 
+                    // حفظ توكن FCM للإشعارات
+                    saveFcmToken(user.uid)
+
                     // إرسال رسالة ترحيبية إذا كان مستخدماً جديداً
                     if (isNewUser) {
                         sendWelcomeMessage(user.uid, displayName.ifBlank { "مستخدم جديد" })
@@ -122,5 +125,21 @@ class AuthViewModel @Inject constructor(
         themeManager.setUserGender(gender)
         themeManager.setAcceptedTerms(true)
         onComplete()
+    }
+
+    private fun saveFcmToken(uid: String) {
+        viewModelScope.launch {
+            try {
+                val token = com.google.firebase.messaging.FirebaseMessaging.getInstance().token.await()
+                com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                    .collection("users")
+                    .document(uid)
+                    .set(mapOf("fcmToken" to token), com.google.firebase.firestore.SetOptions.merge())
+                    .await()
+                Log.d("AuthViewModel", "FCM token saved: ${token.take(10)}...")
+            } catch (e: Exception) {
+                Log.e("AuthViewModel", "Failed to save FCM token: ${e.message}")
+            }
+        }
     }
 }

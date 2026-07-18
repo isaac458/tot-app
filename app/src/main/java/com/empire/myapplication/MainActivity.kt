@@ -56,6 +56,27 @@ class MainActivity : ComponentActivity() {
             analyticsManager.logUserPresence(this)
         }
 
+        // طلب إذن الإشعارات لأندرويد 13+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            val requestPermissionLauncher = registerForActivityResult(
+                androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+            ) { isGranted: Boolean ->
+                if (isGranted) {
+                    android.util.Log.d("MainActivity", "Notification permission granted")
+                } else {
+                    android.util.Log.d("MainActivity", "Notification permission denied")
+                }
+            }
+            
+            if (androidx.core.content.ContextCompat.checkSelfPermission(
+                    this,
+                    android.Manifest.permission.POST_NOTIFICATIONS
+                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                requestPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+
         // محادثات وضع الضيف لا تُحفظ أبداً بشكل دائم: أي عملية إطلاق جديدة للتطبيق
         // وكان آخر وضع معروف هو "ضيف" تمسح كل بيانات ذلك الضيف قبل عرض أي شاشة.
         if (themeManager.isGuest()) {
