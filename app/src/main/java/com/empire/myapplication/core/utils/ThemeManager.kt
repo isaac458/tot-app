@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
+import dagger.Lazy
+import com.empire.myapplication.core.utils.AnalyticsManager
 
 enum class ThemeType { AURA_BLUE, AURA_PINK, AURA_VIOLET, AURA_EMERALD, CUSTOM_IMAGE }
 
@@ -22,7 +24,8 @@ enum class ThemeType { AURA_BLUE, AURA_PINK, AURA_VIOLET, AURA_EMERALD, CUSTOM_I
  */
 @Singleton
 class ThemeManager @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val analyticsManagerLazy: Lazy<AnalyticsManager>
 ) {
     private val prefs: SharedPreferences = context.getSharedPreferences("toot_theme", Context.MODE_PRIVATE)
 
@@ -43,6 +46,7 @@ class ThemeManager @Inject constructor(
     fun setThemeType(type: ThemeType) {
         prefs.edit().putString("theme_type", type.name).apply()
         _themeType.value = type
+        analyticsManagerLazy.get().logThemeChanged(type.name)
     }
 
     private fun getBackgroundImageUriInternal(): String? = prefs.getString("bg_image_uri", null)

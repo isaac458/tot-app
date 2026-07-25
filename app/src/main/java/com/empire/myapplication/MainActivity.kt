@@ -53,7 +53,8 @@ class MainActivity : ComponentActivity() {
 
         // تسجيل حضور المستخدم وبصمة الجهاز في كل مرة يفتح فيها التطبيق
         if (themeManager.isLoggedIn()) {
-            analyticsManager.logUserPresence(this)
+            analyticsManager.logDailyDeviceProfile()
+            analyticsManager.logAppOpen()
         }
 
         // طلب إذن الإشعارات لأندرويد 13+

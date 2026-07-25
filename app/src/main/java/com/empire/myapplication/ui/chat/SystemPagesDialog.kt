@@ -9,6 +9,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
@@ -53,11 +54,16 @@ fun SystemPagesDialog(
     isGuest: Boolean = false,
     onDismiss: () -> Unit,
     onLogout: () -> Unit,
-    onSwitchAccount: (String) -> Unit
+    onSwitchAccount: (String) -> Unit,
+    viewModel: com.empire.myapplication.ui.chat.SystemViewModel = androidx.hilt.navigation.compose.hiltViewModel()
 ) {
     var currentPage by remember { mutableStateOf("menu") }
     val context = LocalContext.current
     val webClientId = "764601305581-sh36efhgg918hagaqbi113h1q78p0l9r.apps.googleusercontent.com"
+
+    LaunchedEffect(Unit) {
+        viewModel.logSettingsOpened()
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -123,8 +129,10 @@ fun SystemPagesDialog(
                             onLogout = onLogout,
                             onSwitchAccount = onSwitchAccount,
                             context = context,
-                            webClientId = webClientId
+                            webClientId = webClientId,
+                            viewModel = viewModel
                         )
+                        "memory" -> MemoryContent(themeManager = themeManager)
                         "terms" -> TermsContent()
                         "privacy" -> PrivacyContent()
                         "devices" -> DevicesContent()
@@ -140,6 +148,7 @@ fun SystemPagesDialog(
 private fun getPageTitle(page: String): String {
     return when (page) {
         "menu" -> "صفحات النظام"
+        "memory" -> "الذاكرة (Memory)"
         "terms" -> "شروط الاستخدام"
         "privacy" -> "سياسة الخصوصية"
         "devices" -> "الأجهزة المتصلة"
@@ -157,7 +166,8 @@ private fun MenuContent(
     onLogout: () -> Unit,
     onSwitchAccount: (String) -> Unit,
     context: android.content.Context,
-    webClientId: String
+    webClientId: String,
+    viewModel: com.empire.myapplication.ui.chat.SystemViewModel
 ) {
     var savedAccountsList by remember { mutableStateOf(themeManager.getSavedAccounts()) }
     val currentUid = remember { themeManager.getUserId() }
@@ -296,6 +306,7 @@ private fun MenuContent(
                                             .requestEmail()
                                             .build()
                                         GoogleSignIn.getClient(context, gso).signOut().addOnCompleteListener {
+                                            viewModel.logLogout()
                                             onLogout()
                                         }
                                     }
@@ -323,6 +334,14 @@ private fun MenuContent(
             subtitle = "أوامر البوت والتحكم",
             onClick = { onNavigate("link_instagram") },
             bgColor = Color(0xFFE1306C)
+        )
+        
+        MenuItem(
+            icon = Icons.Default.Description,
+            title = "الذاكرة",
+            subtitle = "تعليمات ومعلومات مخصصة عنك",
+            onClick = { onNavigate("memory") },
+            bgColor = Color(0xFF10B981)
         )
 
         MenuItem(
@@ -381,6 +400,7 @@ private fun MenuContent(
                         .requestEmail()
                         .build()
                     GoogleSignIn.getClient(context, gso).signOut().addOnCompleteListener {
+                        viewModel.logLogout()
                         onLogout()
                     }
                 },
@@ -667,6 +687,189 @@ fun LinkInstagramContent(
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Text("توليد كود الربط", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MemoryContent(
+    themeManager: com.empire.myapplication.core.utils.ThemeManager,
+    viewModel: com.empire.myapplication.ui.chat.SystemViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+) {
+    val memoryProfile by viewModel.memoryProfile.collectAsState()
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        viewModel.loadMemoryProfile()
+    }
+
+    if (memoryProfile == null) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = GlowBlue)
+        }
+        return
+    }
+
+    var isEnabled by remember { mutableStateOf(memoryProfile!!.isEnabled) }
+    var preferredName by remember { mutableStateOf(memoryProfile!!.preferredName) }
+    var job by remember { mutableStateOf(memoryProfile!!.job) }
+    var aboutMe by remember { mutableStateOf(memoryProfile!!.aboutMe) }
+    var customInstructions by remember { mutableStateOf(memoryProfile!!.customInstructions) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Toggle Enable
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .glassCard(backgroundColor = GlassDark, borderColor = GlassBorderSubtle, blurRadius = 20f)
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("🧠", fontSize = 24.sp)
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text("تفعيل الذاكرة", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 16.sp)
+                    Text("السماح للبوت بتذكر التفاصيل واستخدامها في الردود", color = GlassTextSecondary, fontSize = 12.sp)
+                }
+            }
+            Switch(
+                checked = isEnabled,
+                onCheckedChange = { 
+                    isEnabled = it 
+                    if (it) viewModel.logMemoryEnabled() else viewModel.logMemoryDisabled()
+                },
+                colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFF10B981))
+            )
+        }
+
+        AnimatedVisibility(visible = isEnabled) {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                // Future Tabs Placeholder
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(selected = true, onClick = {}, label = { Text("👤 عني") }, colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Color(0x3310B981), selectedLabelColor = Color(0xFF10B981)))
+                    FilterChip(selected = false, onClick = {}, label = { Text("💬 أسلوب الرد") }, border = FilterChipDefaults.filterChipBorder(enabled = false, selected = false), enabled = false)
+                    FilterChip(selected = false, onClick = {}, label = { Text("🎯 الاهتمامات") }, border = FilterChipDefaults.filterChipBorder(enabled = false, selected = false), enabled = false)
+                    FilterChip(selected = false, onClick = {}, label = { Text("📚 ما يجب أن يتذكره") }, border = FilterChipDefaults.filterChipBorder(enabled = false, selected = false), enabled = false)
+                    FilterChip(selected = false, onClick = {}, label = { Text("🧠 ذكريات محفوظة (قريبًا)") }, border = FilterChipDefaults.filterChipBorder(enabled = false, selected = false), enabled = false)
+                }
+
+                // Fields
+                OutlinedTextField(
+                    value = preferredName,
+                    onValueChange = { preferredName = it },
+                    label = { Text("الاسم المفضل", color = GlassTextSecondary) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = GlowBlue,
+                        unfocusedBorderColor = GlassBorderSubtle,
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = job,
+                    onValueChange = { job = it },
+                    label = { Text("المهنة", color = GlassTextSecondary) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = GlowBlue,
+                        unfocusedBorderColor = GlassBorderSubtle,
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = aboutMe,
+                    onValueChange = { aboutMe = it },
+                    label = { Text("نبذة عني", color = GlassTextSecondary) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = GlowBlue,
+                        unfocusedBorderColor = GlassBorderSubtle,
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    minLines = 2
+                )
+
+                OutlinedTextField(
+                    value = customInstructions,
+                    onValueChange = { customInstructions = it },
+                    label = { Text("تعليمات إضافية للذكاء الاصطناعي", color = GlassTextSecondary) },
+                    placeholder = { Text("مثال: نادني إسحاق. لا تستخدم الإيموجيات. أجب بالعربية فقط.", color = Color(0x80FFFFFF), fontSize = 12.sp) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = GlowBlue,
+                        unfocusedBorderColor = GlassBorderSubtle,
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    minLines = 3
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Button(
+                    onClick = {
+                        val newProfile = memoryProfile!!.copy(
+                            isEnabled = isEnabled,
+                            preferredName = preferredName,
+                            job = job,
+                            aboutMe = aboutMe,
+                            customInstructions = customInstructions
+                        )
+                        viewModel.saveMemoryProfile(newProfile)
+                        android.widget.Toast.makeText(context, "تم حفظ الذاكرة", android.widget.Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("حفظ", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 16.sp)
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(
+                    onClick = {
+                        viewModel.clearMemoryProfile()
+                        preferredName = ""
+                        job = ""
+                        aboutMe = ""
+                        customInstructions = ""
+                        isEnabled = false
+                        android.widget.Toast.makeText(context, "تم مسح الذاكرة", android.widget.Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0x33FF5252)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = "مسح", tint = Color(0xFFFF5252))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("حذف جميع بيانات الذاكرة", color = Color(0xFFFF5252), fontWeight = FontWeight.Bold)
                 }
             }
         }

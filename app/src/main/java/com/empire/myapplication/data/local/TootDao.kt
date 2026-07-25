@@ -59,12 +59,18 @@ interface TootDao {
     @Query("UPDATE Message SET hasSources = :hasSources WHERE id = :messageId")
     suspend fun setMessageHasSources(messageId: Long, hasSources: Boolean)
 
-    // Memory
-    @Query("SELECT * FROM UserMemory")
-    fun getUserMemory(): Flow<List<UserMemory>>
+    // Memory Profile
+    @Query("SELECT * FROM MemoryProfile WHERE userId = :userId LIMIT 1")
+    fun getMemoryProfile(userId: String): Flow<MemoryProfile?>
+
+    @Query("SELECT * FROM MemoryProfile WHERE userId = :userId LIMIT 1")
+    suspend fun getMemoryProfileOnce(userId: String): MemoryProfile?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertMemory(memory: UserMemory)
+    suspend fun insertMemoryProfile(profile: MemoryProfile)
+
+    @Query("DELETE FROM MemoryProfile WHERE userId = :userId")
+    suspend fun deleteMemoryProfile(userId: String)
 
     // Profile
     @Query("SELECT * FROM UserProfile LIMIT 1")

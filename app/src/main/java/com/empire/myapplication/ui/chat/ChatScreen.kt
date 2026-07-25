@@ -75,6 +75,7 @@ fun ChatScreen(
     var sessionToDelete by remember { mutableStateOf<com.empire.myapplication.data.local.ChatSession?>(null) }
     var drawerSearchQuery by remember { mutableStateOf("") }
     val streamingText by viewModel.streamingText.collectAsState()
+    val isWebSearchEnabled by viewModel.isWebSearchEnabled.collectAsState()
     val isGuest = viewModel.themeManager.isGuest()
 
     val themeType by viewModel.themeManager.themeType.collectAsState()
@@ -240,6 +241,23 @@ fun ChatScreen(
         if (granted) startSpeechRecognition() else Toast.makeText(context, "يلزم إذن الميكروفون لاستخدام هذه الميزة", Toast.LENGTH_SHORT).show()
     }
 
+    val exportMdLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/markdown")
+    ) { uri ->
+        uri?.let {
+            try {
+                context.contentResolver.openOutputStream(it)?.use { outputStream ->
+                    val sessionTitle = sessions.find { s -> s.id == viewModel.getActiveChatId() }?.title ?: "محادثة"
+                    val content = com.empire.myapplication.core.utils.ChatExportHelper.generateMarkdown(messages, sessionTitle)
+                    outputStream.write(content.toByteArray())
+                }
+                Toast.makeText(context, "تم التصدير بنجاح كملف Markdown", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "حدث خطأ أثناء حفظ الملف", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     fun onMicButtonClick() {
         if (isListening) {
             stopSpeechRecognizer()
@@ -270,17 +288,31 @@ fun ChatScreen(
         }
     }
 
-    // تحسين التمرير التلقائي: يراقب حجم الرسائل، حالة الكتابة، وحالة لوحة المفاتيح
+    // تحسين التمرير التلقائي مع احترام رغبة المستخدم
     val imeVisible = WindowInsets.isImeVisible
+    val isAtBottom by remember {
+        derivedStateOf {
+            val visibleItems = listState.layoutInfo.visibleItemsInfo
+            if (visibleItems.isEmpty()) return@derivedStateOf true
+            val totalItems = listState.layoutInfo.totalItemsCount
+            // إذا كان المستخدم قريباً من آخر رسالة نعتبره في الأسفل
+            visibleItems.last().index >= totalItems - 2
+        }
+    }
+
     LaunchedEffect(messages.size, streamingText, isTyping, imeVisible) {
         if (messages.isNotEmpty()) {
-            // تأخير بسيط لضمان تحديث الـ Layout بعد ظهور لوحة المفاتيح أو الرسالة الجديدة
-            kotlinx.coroutines.delay(100)
             val totalItems = listState.layoutInfo.totalItemsCount
-            if (totalItems > 0) {
-                try {
-                    listState.animateScrollToItem(totalItems - 1)
-                } catch (e: Exception) { }
+            val isUserMessage = messages.lastOrNull()?.role == "user"
+            
+            // نمرر تلقائياً إذا أرسل المستخدم رسالة، أو لوحة المفاتيح ظهرت، أو كان أصلاً في الأسفل
+            if (isUserMessage || isAtBottom || imeVisible) {
+                kotlinx.coroutines.delay(100)
+                if (totalItems > 0) {
+                    try {
+                        listState.animateScrollToItem(totalItems - 1)
+                    } catch (e: Exception) { }
+                }
             }
         }
     }
@@ -599,13 +631,65 @@ fun ChatScreen(
             Scaffold(
                 topBar = {
                     TopAppBar(
-                        title = { Text("توت", fontWeight = FontWeight.Bold, color = Color.White) },
+                        title = { 
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("توت", fontWeight = FontWeight.Bold, color = Color.White)
+                                val isMemoryEnabled by viewModel.isMemoryEnabled.collectAsState()
+                                if (isMemoryEnabled) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Surface(
+                                        color = Color(0x3310B981),
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x8010B981))
+                                    ) {
+                                        Text("🧠 Memory", fontSize = 10.sp, color = Color.White, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                                    }
+                                }
+                            }
+                        },
                         navigationIcon = {
                             BorderedIconButton(onClick = { openDrawer() }) {
                                 Icon(Icons.Default.Menu, null, tint = Color.White)
                             }
                         },
                         actions = {
+                            if (messages.isNotEmpty()) {
+                                var showExportMenu by remember { mutableStateOf(false) }
+                                Box {
+                                    BorderedIconButton(onClick = { showExportMenu = true }) {
+                                        Icon(Icons.Default.Download, contentDescription = "تصدير", tint = Color.White)
+                                    }
+                                    
+                                    DropdownMenu(
+                                        expanded = showExportMenu,
+                                        onDismissRequest = { showExportMenu = false },
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .border(1.dp, BorderColor, RoundedCornerShape(16.dp))
+                                            .background(Color(0xFF2A2A2A))
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("تصدير كـ PDF", color = Color.White) },
+                                            onClick = {
+                                                showExportMenu = false
+                                                val sessionTitle = sessions.find { it.id == viewModel.getActiveChatId() }?.title ?: "محادثة"
+                                                com.empire.myapplication.core.utils.ChatExportHelper.printChatAsPdf(context, messages, sessionTitle)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("تصدير كـ Markdown", color = Color.White) },
+                                            onClick = {
+                                                showExportMenu = false
+                                                val sessionTitle = sessions.find { it.id == viewModel.getActiveChatId() }?.title ?: "محادثة"
+                                                val fileName = "Chat_${sessionTitle.replace(" ", "_")}.md"
+                                                exportMdLauncher.launch(fileName)
+                                            }
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(4.dp))
+                            }
+                            
                             BorderedIconButton(onClick = {
                                 if (isGuest) {
                                     Toast.makeText(context, "سجّل الدخول للوصول إلى الإعدادات", Toast.LENGTH_SHORT).show()
@@ -731,6 +815,8 @@ fun ChatScreen(
                         onMicClick = { onMicButtonClick() },
                         onCameraClick = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) },
                         onGalleryClick = { galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                        isWebSearchEnabled = isWebSearchEnabled,
+                        onWebSearchToggle = { viewModel.toggleWebSearch() },
                         themeColor = themeColor,
                         modifier = Modifier.navigationBarsPadding()
                     )
@@ -1293,6 +1379,8 @@ fun ChatInputArea(
     onMicClick: () -> Unit,
     onCameraClick: () -> Unit,
     onGalleryClick: () -> Unit,
+    isWebSearchEnabled: Boolean,
+    onWebSearchToggle: () -> Unit,
     themeColor: Color,
     modifier: Modifier = Modifier
 ) {

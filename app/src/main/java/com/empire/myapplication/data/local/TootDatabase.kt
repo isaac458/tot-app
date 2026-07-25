@@ -9,9 +9,9 @@ import androidx.room.RoomDatabase
         Message::class,
         SourceRef::class,
         UserProfile::class,
-        UserMemory::class
+        MemoryProfile::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class TootDatabase : RoomDatabase() {

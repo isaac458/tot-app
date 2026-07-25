@@ -11,9 +11,17 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+import com.empire.myapplication.data.local.MemoryProfile
+import com.empire.myapplication.data.local.TootDao
+import com.empire.myapplication.core.utils.ThemeManager
+import com.empire.myapplication.core.utils.AnalyticsManager
+
 @HiltViewModel
 class SystemViewModel @Inject constructor(
-    private val botRepository: BotRepository
+    private val botRepository: BotRepository,
+    private val tootDao: TootDao,
+    private val themeManager: ThemeManager,
+    private val analyticsManager: AnalyticsManager
 ) : ViewModel() {
 
     private val _isLoading = MutableStateFlow(false)
@@ -80,4 +88,36 @@ class SystemViewModel @Inject constructor(
         _error.value = null
         _unlinkMessage.value = null
     }
+
+    private val _memoryProfile = MutableStateFlow<MemoryProfile?>(null)
+    val memoryProfile: StateFlow<MemoryProfile?> = _memoryProfile.asStateFlow()
+
+    fun loadMemoryProfile() {
+        viewModelScope.launch {
+            val userId = themeManager.getUserId()
+            val profile = tootDao.getMemoryProfileOnce(userId)
+            _memoryProfile.value = profile ?: MemoryProfile(userId = userId)
+        }
+    }
+
+    fun saveMemoryProfile(profile: MemoryProfile) {
+        viewModelScope.launch {
+            val updated = profile.copy(userId = themeManager.getUserId(), updatedAt = System.currentTimeMillis())
+            tootDao.insertMemoryProfile(updated)
+            _memoryProfile.value = updated
+        }
+    }
+
+    fun clearMemoryProfile() {
+        viewModelScope.launch {
+            val userId = themeManager.getUserId()
+            tootDao.deleteMemoryProfile(userId)
+            _memoryProfile.value = MemoryProfile(userId = userId)
+        }
+    }
+
+    fun logMemoryEnabled() = analyticsManager.logMemoryEnabled()
+    fun logMemoryDisabled() = analyticsManager.logMemoryDisabled()
+    fun logLogout() = analyticsManager.logLogout()
+    fun logSettingsOpened() = analyticsManager.logSettingsOpened()
 }

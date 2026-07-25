@@ -73,7 +73,8 @@ class AuthViewModel @Inject constructor(
                     themeManager.saveAccount(user.uid, themeManager.getUserName().ifBlank { displayName }, email, photoUrl)
                     
                     // تسجيل بصمة الجهاز والبيانات في Firestore
-                    analyticsManager.logUserPresence(context)
+                    analyticsManager.logDailyDeviceProfile()
+                    analyticsManager.logLoginGoogle()
 
                     // حفظ توكن FCM للإشعارات
                     saveFcmToken(user.uid)
@@ -101,6 +102,7 @@ class AuthViewModel @Inject constructor(
         themeManager.clearGuestProfileData()
         themeManager.setGuest(true)
         themeManager.setLoggedIn(true)
+        analyticsManager.logLoginGuest()
         onComplete()
     }
 

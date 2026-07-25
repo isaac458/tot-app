@@ -18,12 +18,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import java.io.ByteArrayOutputStream
 import javax.inject.Inject
+import com.empire.myapplication.data.local.TootDao
+import com.empire.myapplication.core.utils.AnalyticsManager
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     application: Application,
     private val repository: AiRepository,
-    val themeManager: ThemeManager
+    private val tootDao: TootDao,
+    val themeManager: ThemeManager,
+    private val analyticsManager: AnalyticsManager
 ) : AndroidViewModel(application) {
 
     private val _messages = MutableStateFlow<List<Message>>(emptyList())
@@ -31,6 +35,16 @@ class ChatViewModel @Inject constructor(
 
     private val _sessions = MutableStateFlow<List<com.empire.myapplication.data.local.ChatSession>>(emptyList())
     val sessions: StateFlow<List<com.empire.myapplication.data.local.ChatSession>> = _sessions.asStateFlow()
+
+    private val _isMemoryEnabled = MutableStateFlow(false)
+    val isMemoryEnabled: StateFlow<Boolean> = _isMemoryEnabled.asStateFlow()
+
+    private val _isWebSearchEnabled = MutableStateFlow(false)
+    val isWebSearchEnabled: StateFlow<Boolean> = _isWebSearchEnabled.asStateFlow()
+
+    fun toggleWebSearch() {
+        _isWebSearchEnabled.value = !_isWebSearchEnabled.value
+    }
 
     private val _isTyping = MutableStateFlow(false)
     val isTyping: StateFlow<Boolean> = _isTyping.asStateFlow()
@@ -43,6 +57,9 @@ class ChatViewModel @Inject constructor(
 
     private val _streamingText = MutableStateFlow("")
     val streamingText: StateFlow<String> = _streamingText.asStateFlow()
+
+    fun logCopyMessage() = analyticsManager.logCopyMessage()
+    fun logShareChat() = analyticsManager.logShareChat()
 
     private val ttsManager = TtsManager(application)
     private var currentChatId: Long = -1L
@@ -62,10 +79,22 @@ class ChatViewModel @Inject constructor(
     val isPaused: StateFlow<Boolean> = _isPaused.asStateFlow()
 
     private var sessionsJob: kotlinx.coroutines.Job? = null
+    private var memoryJob: kotlinx.coroutines.Job? = null
 
     init {
         // Load sessions only. Do not create a session immediately (lazy creation)
         startCollectingSessions()
+        startCollectingMemory()
+    }
+
+    private fun startCollectingMemory() {
+        memoryJob?.cancel()
+        memoryJob = viewModelScope.launch {
+            val ownerId = themeManager.getUserId()
+            tootDao.getMemoryProfile(ownerId).collect { profile ->
+                _isMemoryEnabled.value = profile?.isEnabled == true
+            }
+        }
     }
 
     private fun startCollectingSessions() {
@@ -84,6 +113,7 @@ class ChatViewModel @Inject constructor(
         messagesJob?.cancel()
         messagesJob = null
         startCollectingSessions()
+        startCollectingMemory()
     }
 
     fun createNewSession(title: String) {
@@ -222,10 +252,14 @@ class ChatViewModel @Inject constructor(
             }
 
             try {
+                if (_isWebSearchEnabled.value) {
+                    _botStatus.value = "جاري البحث في الويب..."
+                }
+                
                 // The repository.sendMessage saves BOTH the user message and the bot's full response to DB immediately.
                 // We'll capture the returned text to simulate streaming.
-                val fullResponse = repository.sendMessage(currentChatId, content, imageBase64) { attempt ->
-                    _botStatus.value = "جاري إعادة المحاولة (${attempt}/3)..."
+                val fullResponse = repository.sendMessage(currentChatId, content, imageBase64, _isWebSearchEnabled.value) { attempt ->
+                    _botStatus.value = "إعادة المحاولة ($attempt)..."
                 }
 
                 // Simulate Streaming

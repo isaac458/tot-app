@@ -65,5 +65,9 @@ if exist "%GH_BIN%" (
 )
 
 echo.
+echo [+] 📢 SENDING PUSH NOTIFICATION...
+node send_update.js !ver!
+
+echo.
 echo [DONE] Visit: https://github.com/isaac458/tot-app/releases
 pause

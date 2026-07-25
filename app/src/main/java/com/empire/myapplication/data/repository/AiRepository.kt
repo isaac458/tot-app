@@ -4,25 +4,31 @@ import com.empire.myapplication.BuildConfig
 import com.empire.myapplication.data.local.Message
 import com.empire.myapplication.data.local.SourceRef
 import com.empire.myapplication.data.local.TootDao
-import com.empire.myapplication.data.local.UserMemory
+import com.empire.myapplication.data.local.MemoryProfile
 import com.empire.myapplication.data.remote.*
 import org.json.JSONObject
 import kotlinx.coroutines.delay
+import com.empire.myapplication.core.utils.ThemeManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import javax.inject.Singleton
 
+import com.empire.myapplication.core.utils.AnalyticsManager
+
 @Singleton
 class AiRepository @Inject constructor(
     private val apiService: AiApiService,
-    private val tootDao: TootDao
+    private val tootDao: TootDao,
+    private val themeManager: ThemeManager,
+    private val analyticsManager: AnalyticsManager
 ) {
     fun getMessages(chatId: Long): Flow<List<Message>> = tootDao.getMessagesForSession(chatId)
 
     fun getSessionsForOwner(ownerId: String): Flow<List<com.empire.myapplication.data.local.ChatSession>> = tootDao.getSessionsForOwner(ownerId)
 
     suspend fun createNewSession(title: String, ownerId: String = "guest"): Long {
+        analyticsManager.logChatStarted()
         return tootDao.insertSession(com.empire.myapplication.data.local.ChatSession(title = title, ownerId = ownerId))
     }
 
@@ -34,27 +40,50 @@ class AiRepository @Inject constructor(
         chatId: Long,
         content: String,
         imageBase64: String? = null,
+        useWebSearch: Boolean = false,
         onRetry: ((attempt: Int) -> Unit)? = null
     ): String {
         // 1. حفظ رسالة المستخدم
         val userMsg = Message(sessionId = chatId, role = "user", content = content, imageUri = imageBase64)
         tootDao.insertMessage(userMsg)
+        
+        analyticsManager.logMessageSent(hasImage = imageBase64 != null)
+        if (imageBase64 != null) {
+            analyticsManager.logImageUploaded()
+        }
 
-        // 2. محاولة استخراج معلومات للذاكرة
-        extractAndSaveMemory(content)
-
-        // 3. تحضير السياق (System Instruction + Memory)
-        val memories = tootDao.getUserMemory().first()
-        val memoryContext = if (memories.isNotEmpty()) {
-            "\nمعلومات سابقة عن المستخدم: " + memories.joinToString(". ") { "${it.key}: ${it.value}" }
+        // 2. تحضير السياق (System Instruction + Memory)
+        val userId = themeManager.getUserId()
+        val memoryProfile = tootDao.getMemoryProfileOnce(userId)
+        
+        val memoryContext = if (memoryProfile != null && memoryProfile.isEnabled) {
+            buildString {
+                append("\n\nUser Memory:\n")
+                if (memoryProfile.preferredName.isNotBlank()) append("Preferred Name: ${memoryProfile.preferredName}\n")
+                if (memoryProfile.job.isNotBlank()) append("Job: ${memoryProfile.job}\n")
+                if (memoryProfile.aboutMe.isNotBlank()) append("About Me: ${memoryProfile.aboutMe}\n")
+                if (memoryProfile.customInstructions.isNotBlank()) {
+                    append("Extra Instructions:\n")
+                    memoryProfile.customInstructions.split("\n").forEach {
+                        if (it.isNotBlank()) append("- $it\n")
+                    }
+                }
+                append("\nAlways use this information only when relevant.")
+            }
         } else ""
+
+        var webContext = ""
+        if (useWebSearch) {
+            val searchResults = com.empire.myapplication.core.utils.WebSearchHelper.performSearch(content)
+            webContext = "\n\nمعلومات إضافية حديثة تم الحصول عليها من الإنترنت:\n$searchResults\n\nأجب على المستخدم بالاستعانة بهذه المعلومات إذا كانت مفيدة."
+        }
 
         val systemMessage = GroqMessage(
             role = "system",
-            content = com.empire.myapplication.core.AiConstants.SYSTEM_PROMPT + memoryContext
+            content = com.empire.myapplication.core.AiConstants.SYSTEM_PROMPT + memoryContext + webContext
         )
 
-        // 4. تحويل التاريخ إلى تنسيق Groq/OpenAI (role: system/user/assistant)
+        // 3. تحويل التاريخ إلى تنسيق Groq/OpenAI (role: system/user/assistant)
         // كل رسالة تحتوي صورة تُبنى كمصفوفة أجزاء (نص + image_url) حتى يقدر الموديل يحللها فعلياً،
         // وباقي الرسائل نصية عادية. وجود أي صورة في المحادثة يفعّل استخدام موديل الرؤية (Vision).
         val chatHistory = mutableListOf<GroqMessage>()
@@ -92,6 +121,7 @@ class AiRepository @Inject constructor(
             tootDao.insertSource(SourceRef(messageId = modelMsgId, title = title, url = url, ownerId = "shared"))
         }
 
+        analyticsManager.logMessageReceived()
         return finalContent
     }
 
@@ -107,10 +137,24 @@ class AiRepository @Inject constructor(
             tootDao.deleteSourcesForMessage(lastModelMsg.id)
         }
 
-        // 2. تحضير السياق (دون إضافة أي رسالة مستخدم جديدة)
-        val memories = tootDao.getUserMemory().first()
-        val memoryContext = if (memories.isNotEmpty()) {
-            "\nمعلومات سابقة عن المستخدم: " + memories.joinToString(". ") { "${it.key}: ${it.value}" }
+        // 3. تحضير السياق (System Instruction + Memory)
+        val userId = themeManager.getUserId()
+        val memoryProfile = tootDao.getMemoryProfileOnce(userId)
+        
+        val memoryContext = if (memoryProfile != null && memoryProfile.isEnabled) {
+            buildString {
+                append("\n\nUser Memory:\n")
+                if (memoryProfile.preferredName.isNotBlank()) append("Preferred Name: ${memoryProfile.preferredName}\n")
+                if (memoryProfile.job.isNotBlank()) append("Job: ${memoryProfile.job}\n")
+                if (memoryProfile.aboutMe.isNotBlank()) append("About Me: ${memoryProfile.aboutMe}\n")
+                if (memoryProfile.customInstructions.isNotBlank()) {
+                    append("Extra Instructions:\n")
+                    memoryProfile.customInstructions.split("\n").forEach {
+                        if (it.isNotBlank()) append("- $it\n")
+                    }
+                }
+                append("\nAlways use this information only when relevant.")
+            }
         } else ""
 
         val systemMessage = GroqMessage(
@@ -151,6 +195,7 @@ class AiRepository @Inject constructor(
             tootDao.insertSource(SourceRef(messageId = modelMsgId, title = title, url = url, ownerId = "shared"))
         }
 
+        analyticsManager.logMessageReceived()
         return finalContent
     }
 
@@ -271,29 +316,48 @@ class AiRepository @Inject constructor(
                 )
 
                 if (response.isSuccessful) {
-                    val aiText = response.body()?.choices?.firstOrNull()?.message?.content
-                    return aiText ?: "⚠️ الخادم رجّع 200 لكن بدون أي نص رد. الاستجابة الكاملة: ${response.body()}"
+                    var aiText = response.body()?.choices?.firstOrNull()?.message?.content
+                        ?: return "⚠️ الخادم رجّع 200 لكن بدون أي نص رد. الاستجابة الكاملة: ${response.body()}"
+                    
+                    // تنظيف النص من علامات التفكير (Chain of Thought) التي تظهر مع بعض النماذج مثل Qwen
+                    aiText = aiText.replace(Regex("<think>[\\s\\S]*?</think>"), "").trim()
+                    
+                    return aiText
                 }
 
                 val errorBody = try { response.errorBody()?.string() } catch (e: Exception) { "(فشل قراءة جسم الخطأ: ${e.javaClass.simpleName})" }
                 val diagnosis = parseGroqError(errorBody)
 
                 when (response.code()) {
-                    400 -> return "❌ خطأ 400 (طلب غير صالح).\n$diagnosis"
+                    400 -> {
+                        analyticsManager.logErrorApi("400: $diagnosis")
+                        return "❌ خطأ 400 (طلب غير صالح).\n$diagnosis"
+                    }
                     429 -> {
                         if (attempt < maxRetries - 1) {
                             onRetry?.invoke(attempt + 1)
                             delay(delayMillis[attempt])
                         } else {
+                            analyticsManager.logApiTimeout()
                             return "⚠️ 429 - تجاوزت الحصة/معدل الطلبات بعد $maxRetries محاولات.\n$diagnosis"
                         }
                     }
-                    401, 403 -> return "❌ رفض الخادم المفتاح (كود ${response.code()}). تأكد إن مفتاح Groq صحيح ومنسوخ كامل.\n$diagnosis"
-                    404 -> return "❌ خطأ 404 (غير موجود).\nالموديل المُستخدَم فعلياً: $modelToUse\n$diagnosis"
-                    else -> return "❌ خطأ غير متوقع (كود ${response.code()}).\n$diagnosis"
+                    401, 403 -> {
+                        analyticsManager.logErrorApi("${response.code()}: $diagnosis")
+                        return "❌ رفض الخادم المفتاح (كود ${response.code()}). تأكد إن مفتاح Groq صحيح ومنسوخ كامل.\n$diagnosis"
+                    }
+                    404 -> {
+                        analyticsManager.logErrorApi("404: $diagnosis")
+                        return "❌ خطأ 404 (غير موجود).\nالموديل المُستخدَم فعلياً: $modelToUse\n$diagnosis"
+                    }
+                    else -> {
+                        analyticsManager.logErrorApi("Unknown ${response.code()}: $diagnosis")
+                        return "❌ خطأ غير متوقع (كود ${response.code()}).\n$diagnosis"
+                    }
                 }
             } catch (e: Exception) {
                 if (attempt == maxRetries - 1) {
+                    analyticsManager.logErrorApi(e.localizedMessage ?: "Unknown connection error")
                     return "❌ استثناء أثناء الاتصال: ${e.javaClass.simpleName}\nالرسالة: ${e.localizedMessage ?: "(بدون رسالة)"}"
                 }
                 onRetry?.invoke(attempt + 1)
@@ -304,6 +368,7 @@ class AiRepository @Inject constructor(
     }
 
     suspend fun deleteMessages(chatId: Long) {
+        analyticsManager.logConversationDeleted()
         tootDao.deleteSessionById(chatId)
     }
 
@@ -311,15 +376,4 @@ class AiRepository @Inject constructor(
         tootDao.clearSessionsForOwner(ownerId)
     }
 
-    private suspend fun extractAndSaveMemory(content: String) {
-        if (content.contains("اسمي هو", ignoreCase = true) || content.contains("اسمي", ignoreCase = true)) {
-            val name = content.replace("اسمي هو", "").replace("اسمي", "").trim()
-            if (name.length < 20) tootDao.insertMemory(UserMemory(key = "اسم المستخدم", value = name))
-        }
-
-        if (content.contains("أحب", ignoreCase = true)) {
-            val hobby = content.substringAfter("أحب").trim()
-            if (hobby.length < 50) tootDao.insertMemory(UserMemory(key = "هواية/اهتمام", value = hobby))
-        }
-    }
 }

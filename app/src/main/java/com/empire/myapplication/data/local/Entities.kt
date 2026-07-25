@@ -55,8 +55,12 @@ data class UserProfile(
 )
 
 @Entity
-data class UserMemory(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val key: String,
-    val value: String
+data class MemoryProfile(
+    @PrimaryKey val userId: String,
+    val isEnabled: Boolean = false,
+    val preferredName: String = "",
+    val job: String = "",
+    val aboutMe: String = "",
+    val customInstructions: String = "",
+    val updatedAt: Long = System.currentTimeMillis()
 )
