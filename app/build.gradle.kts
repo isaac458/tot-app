@@ -17,12 +17,12 @@ android {
         applicationId = "com.empire.myapplication"
         minSdk = 24
         targetSdk = 35
-        versionCode = 49
-        versionName = "v4.9"
+        versionCode = 55
+        versionName = "v5.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Ã™â€šÃ˜Â±Ã˜Â§Ã˜Â¡Ã˜Â© Ã™â€¦Ã™ÂÃ˜ÂªÃ˜Â§Ã˜Â­ API Ã™â€¦Ã™â€  local.properties
+        // Ãƒâ„¢Ã¢â‚¬Å¡ÃƒËœÃ‚Â±ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¡ÃƒËœÃ‚Â© Ãƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã‚ÂÃƒËœÃ‚ÂªÃƒËœÃ‚Â§ÃƒËœÃ‚Â­ API Ãƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã¢â‚¬Â  local.properties
         val properties = Properties()
         val file = rootProject.file("local.properties")
         if (file.exists()) {

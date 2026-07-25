@@ -220,7 +220,7 @@ class AiRepository @Inject constructor(
         private const val MODEL_NAME = "openai/gpt-oss-120b"
 
         // للصور
-        private const val VISION_MODEL_NAME = "meta-llama/llama-4-scout-17b-16e-instruct"
+        private const val VISION_MODEL_NAME = "qwen/qwen3.6-27b"
     }
 
     /**
@@ -249,11 +249,13 @@ class AiRepository @Inject constructor(
     ): String {
         val delayMillis = listOf(5_000L, 15_000L, 30_000L)
 
-        if (BuildConfig.AI_API_KEY.isBlank()) {
-            return "❌ لا يوجد مفتاح API مُعرَّف في المشروع (AI_API_KEY فارغ في local.properties)."
+        val rawKey = BuildConfig.AI_API_KEY ?: ""
+        if (rawKey.isBlank() || rawKey == "null") {
+            return "❌ لا يوجد مفتاح API مُعرَّف. تأكد من وضعه في local.properties."
         }
 
-        val key = BuildConfig.AI_API_KEY.trim().replace("\\s".toRegex(), "")
+        // تنظيف المفتاح من أي علامات اقتباس أو مسافات قد تأتي من BuildConfig
+        val key = rawKey.trim().removeSurrounding("\"").trim().replace("\\s".toRegex(), "")
         val modelToUse = if (useVisionModel) VISION_MODEL_NAME else MODEL_NAME
 
         repeat(maxRetries) { attempt ->
