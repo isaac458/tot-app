@@ -17,8 +17,8 @@ android {
         applicationId = "com.empire.myapplication"
         minSdk = 24
         targetSdk = 35
-        versionCode = 56
-        versionName = "v5.6"
+        versionCode = 57
+        versionName = "v5.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

@@ -58,6 +58,22 @@ class ChatViewModel @Inject constructor(
     private val _streamingText = MutableStateFlow("")
     val streamingText: StateFlow<String> = _streamingText.asStateFlow()
 
+    // Optimistic UI: رسالة المستخدم تظهر فوراً قبل انتظار API
+    private val _optimisticUserMessage = MutableStateFlow<Message?>(null)
+    val optimisticUserMessage: StateFlow<Message?> = _optimisticUserMessage.asStateFlow()
+
+    // حالة نجاح النسخ لإظهار ✓ مؤقتاً
+    private val _copySuccessId = MutableStateFlow<Long?>(null)
+    val copySuccessId: StateFlow<Long?> = _copySuccessId.asStateFlow()
+
+    fun notifyCopied(messageId: Long) {
+        viewModelScope.launch {
+            _copySuccessId.value = messageId
+            delay(1800)
+            if (_copySuccessId.value == messageId) _copySuccessId.value = null
+        }
+    }
+
     fun logCopyMessage() = analyticsManager.logCopyMessage()
     fun logShareChat() = analyticsManager.logShareChat()
 
@@ -216,6 +232,7 @@ class ChatViewModel @Inject constructor(
         chatJob?.cancel()
         _isTyping.value = false
         _botStatus.value = null
+        _optimisticUserMessage.value = null
         // If we were streaming, just stop it and save it
         if (_streamingText.value.isNotEmpty()) {
             _streamingText.value = ""
@@ -232,6 +249,21 @@ class ChatViewModel @Inject constructor(
                 collectMessages(currentChatId)
             }
 
+            // === Optimistic UI: إظهار رسالة المستخدم فوراً ===
+            val imageBase64 = images.firstOrNull()?.let {
+                val outputStream = ByteArrayOutputStream()
+                it.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
+                val byteArray = outputStream.toByteArray()
+                Base64.encodeToString(byteArray, Base64.NO_WRAP)
+            }
+            _optimisticUserMessage.value = Message(
+                id = Long.MIN_VALUE, // ID مؤقت
+                sessionId = currentChatId,
+                role = "user",
+                content = content,
+                imageUri = imageBase64
+            )
+
             // Auto-rename if it's the first message
             val currentSession = _sessions.value.find { it.id == currentChatId }
             if (_messages.value.isEmpty() && (currentSession?.title == "محادثة جديدة" || currentSession == null)) {
@@ -242,14 +274,6 @@ class ChatViewModel @Inject constructor(
             _isTyping.value = true
             _botStatus.value = "توت تكتب..."
             _streamingText.value = ""
-
-            // We only support sending the first image via the API currently, but we accept a list
-            val imageBase64 = images.firstOrNull()?.let {
-                val outputStream = ByteArrayOutputStream()
-                it.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
-                val byteArray = outputStream.toByteArray()
-                Base64.encodeToString(byteArray, Base64.NO_WRAP)
-            }
 
             try {
                 if (_isWebSearchEnabled.value) {
@@ -262,22 +286,27 @@ class ChatViewModel @Inject constructor(
                     _botStatus.value = "إعادة المحاولة ($attempt)..."
                 }
 
-                // Simulate Streaming
+                // نزيل الرسالة المؤقتة بعد وصول البيانات الحقيقية من قاعدة البيانات
+                _optimisticUserMessage.value = null
+
+                // Simulate Streaming - بث الرد كلمة بكلمة بشكل سلس
                 _botStatus.value = null
                 val wordsList = fullResponse.split(" ")
-                var currentText = ""
+                val sb = StringBuilder()
                 for (word in wordsList) {
-                    currentText += "$word "
-                    _streamingText.value = currentText
-                    delay(30) // 30ms delay per word
+                    sb.append(word)
+                    sb.append(" ")
+                    _streamingText.value = sb.toString()
+                    // تأخير متغير: كلمات أطول = تأخير أكبر قليلاً لتأثير طبيعي
+                    delay(if (word.length > 6) 35L else 25L)
                 }
                 
                 // Clear streaming text once done (the full message is already in DB and collected by Flow)
                 _streamingText.value = ""
 
                 // ذكاء توليد العنوان: يتم فقط إذا كان العنوان الحالي افتراضياً
-                val currentSession = _sessions.value.find { it.id == currentChatId }
-                val isDefaultTitle = currentSession?.title == "محادثة جديدة" || currentSession?.title?.isBlank() == true
+                val currentSession2 = _sessions.value.find { it.id == currentChatId }
+                val isDefaultTitle = currentSession2?.title == "محادثة جديدة" || currentSession2?.title?.isBlank() == true
                 
                 if (isDefaultTitle) {
                     viewModelScope.launch {
@@ -289,10 +318,12 @@ class ChatViewModel @Inject constructor(
                 }
                 
             } catch (e: kotlinx.coroutines.CancellationException) {
-                // Cancelled
+                // Cancelled - نزيل الرسالة المؤقتة في حال الإلغاء
+                _optimisticUserMessage.value = null
             } finally {
                 _isTyping.value = false
                 _botStatus.value = null
+                _optimisticUserMessage.value = null
             }
         }
     }

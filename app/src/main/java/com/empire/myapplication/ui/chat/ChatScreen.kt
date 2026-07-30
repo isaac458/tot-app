@@ -51,6 +51,9 @@ import com.empire.myapplication.ui.profile.ProfileScreen
 import java.net.URI
 import java.io.File
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.scale
 
 private val BorderColor = Color(0x26FFFFFF)
 
@@ -77,6 +80,8 @@ fun ChatScreen(
     val streamingText by viewModel.streamingText.collectAsState()
     val isWebSearchEnabled by viewModel.isWebSearchEnabled.collectAsState()
     val isGuest = viewModel.themeManager.isGuest()
+    val optimisticUserMessage by viewModel.optimisticUserMessage.collectAsState()
+    val copySuccessId by viewModel.copySuccessId.collectAsState()
 
     val themeType by viewModel.themeManager.themeType.collectAsState()
     val themeColor = when(themeType) {
@@ -300,17 +305,19 @@ fun ChatScreen(
         }
     }
 
-    LaunchedEffect(messages.size, streamingText, isTyping, imeVisible) {
-        if (messages.isNotEmpty()) {
-            val totalItems = listState.layoutInfo.totalItemsCount
-            val isUserMessage = messages.lastOrNull()?.role == "user"
-            
+    LaunchedEffect(messages.size, streamingText, isTyping, imeVisible, optimisticUserMessage) {
+        val totalItems = listState.layoutInfo.totalItemsCount
+        val hasMessages = messages.isNotEmpty() || optimisticUserMessage != null
+        val isUserMessage = messages.lastOrNull()?.role == "user" || optimisticUserMessage != null
+        
+        if (hasMessages) {
             // نمرر تلقائياً إذا أرسل المستخدم رسالة، أو لوحة المفاتيح ظهرت، أو كان أصلاً في الأسفل
             if (isUserMessage || isAtBottom || imeVisible) {
-                kotlinx.coroutines.delay(100)
-                if (totalItems > 0) {
+                kotlinx.coroutines.delay(60) // تأخير أقل لاستجابة أسرع
+                val newTotal = listState.layoutInfo.totalItemsCount
+                if (newTotal > 0) {
                     try {
-                        listState.animateScrollToItem(totalItems - 1)
+                        listState.animateScrollToItem(newTotal - 1)
                     } catch (e: Exception) { }
                 }
             }
@@ -718,7 +725,18 @@ fun ChatScreen(
                         .imePadding() // يرفع المحتوى بالكامل عند ظهور لوحة المفاتيح
                 ) {
                     Box(modifier = Modifier.weight(1f)) {
-                        if (messages.isEmpty()) {
+                        // دمج الرسائل الحقيقية مع الرسالة المؤقتة (Optimistic UI)
+                        val displayMessages = remember(messages, optimisticUserMessage) {
+                            val list = messages.toMutableList()
+                            val opt = optimisticUserMessage
+                            // نضيف الرسالة المؤقتة فقط إذا لم تكن موجودة مسبقاً في القاعدة
+                            if (opt != null && list.none { it.content == opt.content && it.role == "user" && (System.currentTimeMillis() - it.timestamp) < 5000 }) {
+                                list.add(opt)
+                            }
+                            list
+                        }
+
+                        if (displayMessages.isEmpty()) {
                             WelcomeGrid { inputText = it }
                         } else {
                             LazyColumn(
@@ -727,7 +745,7 @@ fun ChatScreen(
                                 verticalArrangement = Arrangement.spacedBy(20.dp),
                                 contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp)
                             ) {
-                                items(messages, key = { it.id }) { message ->
+                                items(displayMessages, key = { it.id }) { message ->
                                     var visible by remember { mutableStateOf(false) }
                                     LaunchedEffect(Unit) {
                                         visible = true
@@ -735,25 +753,30 @@ fun ChatScreen(
                                     Box {
                                         androidx.compose.animation.AnimatedVisibility(
                                             visible = visible,
-                                            enter = fadeIn(animationSpec = tween(400)) + slideInVertically(
-                                                initialOffsetY = { it / 3 },
-                                                animationSpec = tween(400)
+                                            enter = fadeIn(animationSpec = tween(300, easing = FastOutSlowInEasing)) + slideInVertically(
+                                                initialOffsetY = { it / 5 },
+                                                animationSpec = spring(
+                                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                    stiffness = Spring.StiffnessMedium
+                                                )
                                             ),
-                                            exit = fadeOut(animationSpec = tween(400))
+                                            exit = fadeOut(animationSpec = tween(200))
                                         ) {
                                             MessageItem(
                                                 message = message,
-                                                streamingText = if (message == messages.last() && isTyping) streamingText else null,
+                                                streamingText = if (message == displayMessages.last() && isTyping) streamingText else null,
                                                 isSpeaking = speakingMessageId == message.id,
                                                 isPaused = isPaused && speakingMessageId == message.id,
                                                 isLastBotMessage = (message == messages.lastOrNull { it.role != "user" }),
+                                                isCopySuccess = copySuccessId == message.id,
                                                 onSpeak = { viewModel.speak(message.id, message.content) },
                                                 onPauseSpeak = { viewModel.pauseSpeaking() },
                                                 onResumeSpeak = { viewModel.resumeSpeaking() },
                                                 onStopSpeak = { viewModel.stopSpeaking() },
                                                 onShare = { viewModel.shareChat("توت") },
                                                 onRegenerate = { viewModel.regenerateLastResponse() },
-                                                getSources = { viewModel.getSourcesForMessage(message.id) }
+                                                getSources = { viewModel.getSourcesForMessage(message.id) },
+                                                onCopy = { viewModel.notifyCopied(message.id) }
                                             )
                                         }
                                     }
@@ -768,24 +791,33 @@ fun ChatScreen(
                             val showScrollDown by remember {
                                 derivedStateOf {
                                     val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-                                    messages.isNotEmpty() && lastVisible < messages.size - 2
+                                    displayMessages.isNotEmpty() && lastVisible < displayMessages.size - 2
                                 }
                             }
 
                             androidx.compose.animation.AnimatedVisibility(
                                 visible = showScrollDown,
                                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
-                                enter = fadeIn(),
-                                exit = fadeOut()
+                                enter = fadeIn(tween(200)) + slideInVertically(initialOffsetY = { it / 2 }, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)),
+                                exit = fadeOut(tween(150)) + slideOutVertically(targetOffsetY = { it / 2 })
                             ) {
+                                val scrollInteractionSource = remember { MutableInteractionSource() }
+                                val isScrollPressed by scrollInteractionSource.collectIsPressedAsState()
+                                val scrollBtnScale by animateFloatAsState(
+                                    targetValue = if (isScrollPressed) 0.88f else 1f,
+                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessHigh),
+                                    label = "scrollBtn"
+                                )
                                 Surface(
-                                    onClick = { scope.launch { listState.animateScrollToItem(messages.size - 1) } },
+                                    onClick = { scope.launch { listState.animateScrollToItem(displayMessages.size - 1) } },
                                     shape = CircleShape,
                                     color = Color(0xFF2F2F2F),
-                                    modifier = Modifier.size(36.dp)
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x33FFFFFF)),
+                                    interactionSource = scrollInteractionSource,
+                                    modifier = Modifier.size(40.dp).scale(scrollBtnScale)
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
-                                        Icon(Icons.Default.KeyboardArrowDown, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                                        Icon(Icons.Default.KeyboardArrowDown, null, tint = Color.White, modifier = Modifier.size(22.dp))
                                     }
                                 }
                             }
@@ -828,13 +860,21 @@ fun ChatScreen(
 
 @Composable
 private fun BorderedIconButton(onClick: () -> Unit, content: @Composable () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.85f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessHigh),
+        label = "iconScale"
+    )
     Box(
         modifier = Modifier
             .padding(4.dp)
             .size(38.dp)
+            .scale(scale)
             .clip(CircleShape)
             .border(1.dp, BorderColor, CircleShape)
-            .clickable { onClick() },
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() },
         contentAlignment = Alignment.Center
     ) {
         content()
@@ -966,12 +1006,14 @@ fun MessageItem(
     isSpeaking: Boolean = false,
     isPaused: Boolean = false,
     isLastBotMessage: Boolean = false,
+    isCopySuccess: Boolean = false,
     onSpeak: () -> Unit = {},
     onPauseSpeak: () -> Unit = {},
     onResumeSpeak: () -> Unit = {},
     onStopSpeak: () -> Unit = {},
     onShare: () -> Unit = {},
     onRegenerate: () -> Unit = {},
+    onCopy: () -> Unit = {},
     getSources: () -> kotlinx.coroutines.flow.Flow<List<SourceRef>> = { kotlinx.coroutines.flow.flowOf(emptyList()) }
 ) {
     val isUser = message.role == "user"
@@ -1103,12 +1145,14 @@ fun MessageItem(
                         MessageActionsRow(
                             isSpeaking = isSpeaking,
                             isPaused = isPaused,
+                            isCopySuccess = isCopySuccess,
                             onListen = onSpeak,
                             onPauseListen = onPauseSpeak,
                             onResumeListen = onResumeSpeak,
                             onStopListen = onStopSpeak,
                             onCopy = {
                                 clipboard.setText(AnnotatedString(content))
+                                onCopy()
                                 Toast.makeText(context, "تم النسخ", Toast.LENGTH_SHORT).show()
                             },
                             onShare = onShare
@@ -1174,6 +1218,7 @@ fun MessageItem(
 private fun MessageActionsRow(
     isSpeaking: Boolean,
     isPaused: Boolean,
+    isCopySuccess: Boolean = false,
     onListen: () -> Unit,
     onPauseListen: () -> Unit,
     onResumeListen: () -> Unit,
@@ -1204,19 +1249,56 @@ private fun MessageActionsRow(
                 onClick = onStopListen
             )
         }
-        SmallActionIcon(icon = Icons.Default.ContentCopy, contentDescription = "نسخ", onClick = onCopy)
+        // زر النسخ مع تأثير إظهار ✓
+        val copyIcon = if (isCopySuccess) Icons.Default.Check else Icons.Default.ContentCopy
+        val copyTint = if (isCopySuccess) Color(0xFF4CAF50) else Color.White.copy(0.75f)
+        val copyScale by animateFloatAsState(
+            targetValue = if (isCopySuccess) 1.15f else 1f,
+            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessHigh),
+            label = "copyScale"
+        )
+        Box(
+            modifier = Modifier
+                .size(30.dp)
+                .scale(copyScale)
+                .clip(CircleShape)
+                .border(1.dp, if (isCopySuccess) Color(0x664CAF50) else BorderColor, CircleShape)
+                .clickable { onCopy() },
+            contentAlignment = Alignment.Center
+        ) {
+            androidx.compose.animation.Crossfade(
+                targetState = isCopySuccess,
+                animationSpec = tween(200),
+                label = "copyIcon"
+            ) { isSuccess ->
+                Icon(
+                    imageVector = if (isSuccess) Icons.Default.Check else Icons.Default.ContentCopy,
+                    contentDescription = "نسخ",
+                    tint = if (isSuccess) Color(0xFF4CAF50) else Color.White.copy(0.75f),
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+        }
         SmallActionIcon(icon = Icons.Default.Share, contentDescription = "مشاركة المحادثة", onClick = onShare)
     }
 }
 
 @Composable
 private fun SmallActionIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, contentDescription: String, onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.82f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessHigh),
+        label = "smallIconScale"
+    )
     Box(
         modifier = Modifier
             .size(30.dp)
+            .scale(scale)
             .clip(CircleShape)
             .border(1.dp, BorderColor, CircleShape)
-            .clickable { onClick() },
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() },
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, contentDescription = contentDescription, tint = Color.White.copy(0.75f), modifier = Modifier.size(15.dp))
@@ -1445,24 +1527,41 @@ fun ChatInputArea(
                     value = text,
                     onValueChange = onTextChange,
                     placeholder = { Text("رسالة توت...", color = Color(0xFF9E9E9E)) },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .animateContentSize(
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMedium
+                            )
+                        ),
+                    maxLines = 6,
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
                         unfocusedContainerColor = Color.Transparent,
                         focusedIndicatorColor = Color.Transparent,
                         unfocusedIndicatorColor = Color.Transparent,
-                        focusedTextColor = Color.White
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
                     )
                 )
 
                 if (isTyping) {
+                    val stopInteraction = remember { MutableInteractionSource() }
+                    val stopPressed by stopInteraction.collectIsPressedAsState()
+                    val stopScale by animateFloatAsState(
+                        targetValue = if (stopPressed) 0.85f else 1f,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessHigh),
+                        label = "stopScale"
+                    )
                     Box(
                         modifier = Modifier
                             .padding(2.dp)
                             .size(36.dp)
+                            .scale(stopScale)
                             .clip(CircleShape)
                             .border(1.dp, MaterialTheme.colorScheme.error.copy(0.5f), CircleShape)
-                            .clickable { onSend() }, // سنقوم بتعديل ViewModel ليوقف الإرسال عند استدعاء onSend والحالة typing
+                            .clickable(interactionSource = stopInteraction, indication = null) { onSend() },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -1473,13 +1572,21 @@ fun ChatInputArea(
                         )
                     }
                 } else if (text.isNotBlank() || images.isNotEmpty()) {
+                    val sendInteraction = remember { MutableInteractionSource() }
+                    val sendPressed by sendInteraction.collectIsPressedAsState()
+                    val sendScale by animateFloatAsState(
+                        targetValue = if (sendPressed) 0.85f else 1f,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessHigh),
+                        label = "sendScale"
+                    )
                     Box(
                         modifier = Modifier
                             .padding(2.dp)
                             .size(36.dp)
+                            .scale(sendScale)
                             .clip(CircleShape)
                             .border(1.dp, BorderColor, CircleShape)
-                            .clickable { onSend() },
+                            .clickable(interactionSource = sendInteraction, indication = null) { onSend() },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(Icons.AutoMirrored.Filled.Send, null, tint = themeColor, modifier = Modifier.size(18.dp))
